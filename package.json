@@ -1,0 +1,25 @@
+{
+  "name": "multi-tenant-app",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/index.js",
+    "start": "node --experimental-strip-types src/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.0.0",
+    "fastify": "^5.3.3",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.0.0"
+  }
+}
