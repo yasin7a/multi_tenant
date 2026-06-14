@@ -30,6 +30,10 @@ function getSubdomain(request) {
   return null
 }
 
+app.get('/', async () => {
+  return { message: 'server is ok' }
+})
+
 app.post('/register', async (request, reply) => {
   const { username, email, password } = request.body
 
