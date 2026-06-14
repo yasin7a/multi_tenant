@@ -15,14 +15,24 @@ function setAuthCookie(reply, userId) {
   })
 }
 
+const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
+
 function getSubdomain(request) {
   const host = request.hostname
-  const parts = host.split('.')
 
-  if (parts.at(-1) === 'localhost' && parts.length >= 2 && parts[0] !== 'localhost') {
-    return parts[0]
+  if (host === 'localhost' || host === ROOT_DOMAIN) {
+    return null
   }
 
+  if (host.endsWith('.localhost')) {
+    return host.slice(0, -'.localhost'.length)
+  }
+
+  if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+    return host.slice(0, -(ROOT_DOMAIN.length + 1))
+  }
+
+  const parts = host.split('.')
   if (parts.length >= 3) {
     return parts[0]
   }
@@ -30,9 +40,48 @@ function getSubdomain(request) {
   return null
 }
 
-app.get('/', async () => {
+async function getPublicProfile(subdomain) {
+  return prisma.user.findFirst({
+    where: { tenant: { subdomain } },
+    select: {
+      username: true,
+      tenantId: true,
+      tenant: { select: { id: true, name: true, subdomain: true } },
+    },
+  })
+}
+
+async function publicSiteHandler(request, reply) {
+  const subdomain = getSubdomain(request)
+
+  if (!subdomain) {
+    return reply.code(400).send({ error: 'visit a tenant subdomain to view their site' })
+  }
+
+  const user = await getPublicProfile(subdomain)
+
+  if (!user) {
+    return reply.code(404).send({ error: 'site not found' })
+  }
+
+  return {
+    username: user.username,
+    tenantId: user.tenantId,
+    tenant: user.tenant,
+  }
+}
+
+app.get('/', async (request, reply) => {
+  const subdomain = getSubdomain(request)
+
+  if (subdomain) {
+    return publicSiteHandler(request, reply)
+  }
+
   return { message: 'server is ok' }
 })
+
+app.get('/site', publicSiteHandler)
 
 app.post('/register', async (request, reply) => {
   const { username, email, password } = request.body
@@ -103,29 +152,6 @@ app.post('/login', async (request, reply) => {
 })
 
 app.get('/profile', async (request, reply) => {
-  const subdomain = getSubdomain(request)
-
-  if (subdomain) {
-    const user = await prisma.user.findFirst({
-      where: { tenant: { subdomain } },
-      select: {
-        username: true,
-        tenantId: true,
-        tenant: { select: { id: true, name: true, subdomain: true } },
-      },
-    })
-
-    if (!user) {
-      return reply.code(404).send({ error: 'profile not found' })
-    }
-
-    return {
-      username: user.username,
-      tenantId: user.tenantId,
-      tenant: user.tenant,
-    }
-  }
-
   const userId = request.cookies.userId
 
   if (!userId) {
