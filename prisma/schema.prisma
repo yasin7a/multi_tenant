@@ -1,5 +1,3 @@
-
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -8,8 +6,6 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-
 
 model Tenant {
   id        String   @id @default(cuid())
