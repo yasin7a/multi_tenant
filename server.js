@@ -15,6 +15,21 @@ function setAuthCookie(reply, userId) {
   })
 }
 
+function getSubdomain(request) {
+  const host = request.hostname
+  const parts = host.split('.')
+
+  if (parts.at(-1) === 'localhost' && parts.length >= 2 && parts[0] !== 'localhost') {
+    return parts[0]
+  }
+
+  if (parts.length >= 3) {
+    return parts[0]
+  }
+
+  return null
+}
+
 app.post('/register', async (request, reply) => {
   const { username, email, password } = request.body
 
@@ -30,11 +45,19 @@ app.post('/register', async (request, reply) => {
     return reply.code(409).send({ error: 'username or email already exists' })
   }
 
+  const subdomain = username.toLowerCase()
+
+  const existingTenant = await prisma.tenant.findUnique({ where: { subdomain } })
+
+  if (existingTenant) {
+    return reply.code(409).send({ error: 'subdomain already taken' })
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10)
 
   const user = await prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
-      data: { name: `${username}'s tenant` },
+      data: { name: `${username}'s tenant`, subdomain },
     })
 
     return tx.user.create({
@@ -76,6 +99,29 @@ app.post('/login', async (request, reply) => {
 })
 
 app.get('/profile', async (request, reply) => {
+  const subdomain = getSubdomain(request)
+
+  if (subdomain) {
+    const user = await prisma.user.findFirst({
+      where: { tenant: { subdomain } },
+      select: {
+        username: true,
+        tenantId: true,
+        tenant: { select: { id: true, name: true, subdomain: true } },
+      },
+    })
+
+    if (!user) {
+      return reply.code(404).send({ error: 'profile not found' })
+    }
+
+    return {
+      username: user.username,
+      tenantId: user.tenantId,
+      tenant: user.tenant,
+    }
+  }
+
   const userId = request.cookies.userId
 
   if (!userId) {
@@ -89,7 +135,7 @@ app.get('/profile', async (request, reply) => {
       username: true,
       email: true,
       tenantId: true,
-      tenant: { select: { id: true, name: true } },
+      tenant: { select: { id: true, name: true, subdomain: true } },
     },
   })
 
@@ -102,29 +148,6 @@ app.get('/profile', async (request, reply) => {
     userId: user.id,
     username: user.username,
     email: user.email,
-    tenantId: user.tenantId,
-    tenant: user.tenant,
-  }
-})
-
-app.get('/public/:tenantId/profile', async (request, reply) => {
-  const { tenantId } = request.params
-
-  const user = await prisma.user.findFirst({
-    where: { tenantId },
-    select: {
-      username: true,
-      tenantId: true,
-      tenant: { select: { id: true, name: true } },
-    },
-  })
-
-  if (!user) {
-    return reply.code(404).send({ error: 'profile not found' })
-  }
-
-  return {
-    username: user.username,
     tenantId: user.tenantId,
     tenant: user.tenant,
   }
