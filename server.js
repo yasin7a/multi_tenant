@@ -412,22 +412,11 @@ async function renderSubdomainEdit(request, reply, subdomain, { isCustomDomain =
   return renderProfileEdit(reply, request, authUser)
 }
 
-// Caddy on_demand_tls calls this before issuing a certificate.
+// Caddy on_demand_tls calls this before issuing a certificate (custom domains only).
 app.get('/internal/caddy-ask', async (request, reply) => {
   const domain = normalizeCustomDomain(request.query.domain)
-  if (!domain) return reply.code(403).send()
-
-  if (domain === ROOT_DOMAIN) return reply.code(200).send('ok')
-
-  if (domain.endsWith(`.${ROOT_DOMAIN}`)) {
-    const subdomain = domain.slice(0, -(ROOT_DOMAIN.length + 1))
-    if (subdomain && !subdomain.includes('.') && /^[a-z0-9-]+$/.test(subdomain)) {
-      return reply.code(200).send('ok')
-    }
-    return reply.code(403).send()
-  }
-
-  if (!isValidCustomDomain(domain)) return reply.code(403).send()
+  if (!domain || !isValidCustomDomain(domain)) return reply.code(403).send()
+  if (domain === ROOT_DOMAIN || domain.endsWith(`.${ROOT_DOMAIN}`)) return reply.code(403).send()
 
   const tenant = await prisma.tenant.findFirst({
     where: { customDomain: domain },

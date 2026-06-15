@@ -8,14 +8,17 @@ git pull && npm install && npx prisma migrate deploy
 pm2 restart multi-tenant
 ```
 
-**Caddy** (app must be running on :3000 first):
+**Caddy** (app on :3000; wildcard cert should already be on the server):
 
 ```bash
 pm2 restart multi-tenant
 sudo bash scripts/setup-caddy.sh
 ```
 
-Caddy reverse-proxies HTTPS to the app. Custom domains get automatic Let's Encrypt certificates after the user points DNS to your server and saves the domain in their profile.
+- Platform (`multi.takitahmid.com`, `*.multi.takitahmid.com`) → wildcard cert, instant HTTPS
+- User custom domains → on-demand TLS after DNS + profile save
+
+Renew wildcard: `sudo certbot renew && sudo systemctl reload caddy`
 
 If Caddy fails: `journalctl -u caddy -n 20`
 

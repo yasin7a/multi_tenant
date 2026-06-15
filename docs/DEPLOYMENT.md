@@ -29,13 +29,27 @@ pm2 start server.js --name multi-tenant
 pm2 save
 ```
 
-## Caddy (HTTPS + custom domains)
+## SSL
+
+Wildcard cert for `multi.takitahmid.com` + `*.multi.takitahmid.com` should already exist at `/etc/letsencrypt/live/multi.takitahmid.com/`.
+
+New server only — issue once with DNS TXT when certbot asks:
+
+```bash
+certbot certonly --manual --preferred-challenges dns \
+  -d multi.takitahmid.com -d '*.multi.takitahmid.com'
+```
+
+## Caddy
 
 ```bash
 sudo bash scripts/setup-caddy.sh
 ```
 
-Caddy terminates HTTPS and proxies to the app on port 3000. When a user adds a custom domain, they create an A record to `SERVER_IP` and save the domain in profile edit. Caddy asks the app (`/internal/caddy-ask`) whether to issue a certificate; only registered custom domains and platform hosts are approved.
+| Host | SSL |
+|------|-----|
+| `multi.takitahmid.com`, `*.multi.takitahmid.com` | Wildcard cert (instant, including unknown subdomains) |
+| User custom domain | On-demand TLS via `/internal/caddy-ask` (must be saved in profile + A record to `SERVER_IP`) |
 
 ## Update
 
@@ -47,4 +61,6 @@ pm2 restart multi-tenant
 ## Troubleshooting
 
 - Site down: `pm2 status` and `systemctl status caddy`
-- Custom domain SSL: confirm DNS A record points to `SERVER_IP`, domain is saved in profile, then `journalctl -u caddy -n 30`
+- Wildcard cert missing: re-run certbot command in SSL section above, then `sudo bash scripts/setup-caddy.sh`
+- Renew wildcard: `sudo certbot renew && sudo systemctl reload caddy`
+- Custom domain SSL: DNS A record → `SERVER_IP`, domain saved in profile, then `journalctl -u caddy -n 30`
