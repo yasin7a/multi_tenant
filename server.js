@@ -245,6 +245,7 @@ async function renderTenantNotFound(reply, request, subdomain) {
   })
   const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
     title: 'Site not found',
+    meta: null,
     body,
     authUser,
     ...getNavUrls(authUser),

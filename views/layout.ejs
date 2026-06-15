@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %> · Idiot</title>
-  <% if (meta) { %>
+  <% if (typeof meta !== 'undefined' && meta) { %>
     <meta name="description" content="<%= meta.description %>">
     <link rel="canonical" href="<%= meta.canonical %>">
     <meta property="og:type" content="<%= meta.ogType %>">
