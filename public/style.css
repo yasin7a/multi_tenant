@@ -42,10 +42,62 @@ body {
 .topbar {
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
   background: rgba(11, 15, 26, 0.7);
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.topbar-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.topbar-nav a:hover {
+  color: var(--text);
+}
+
+.nav-user {
+  color: var(--text);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.btn-nav {
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-strong), #8b5cf6);
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.btn-nav:hover {
+  color: #fff !important;
+  opacity: 0.9;
+}
+
+.btn-nav-logout {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text) !important;
+}
+
+.btn-nav-logout:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5 !important;
 }
 
 .brand {
