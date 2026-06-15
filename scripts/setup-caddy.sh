@@ -6,6 +6,13 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/multi_tenant}"
 ACME_EMAIL="${ACME_EMAIL:-takitahmid20@gmail.com}"
+CADDYFILE_SRC="$APP_DIR/caddy/Caddyfile"
+
+if [ ! -f "$CADDYFILE_SRC" ]; then
+  echo "ERROR: $CADDYFILE_SRC not found."
+  echo "Run: cd $APP_DIR && git pull"
+  exit 1
+fi
 
 echo "==> Installing Caddy..."
 if ! command -v caddy >/dev/null 2>&1; then
@@ -20,7 +27,7 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 
 echo "==> Copying Caddyfile (email: $ACME_EMAIL)..."
-sed "s/ACME_EMAIL_PLACEHOLDER/$ACME_EMAIL/" "$APP_DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
+sed "s/ACME_EMAIL_PLACEHOLDER/$ACME_EMAIL/" "$CADDYFILE_SRC" > /etc/caddy/Caddyfile
 
 echo "==> Validating Caddyfile..."
 caddy validate --config /etc/caddy/Caddyfile
