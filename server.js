@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createWriteStream } from 'node:fs'
 import fs from 'node:fs/promises'
+import dns from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import Fastify from 'fastify'
@@ -33,25 +34,39 @@ await app.register(formbody)
 await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } })
 await app.register(fastifyStatic, { root: path.join(__dirname, 'public') })
 
-function setAuthCookie(reply, userId) {
+function isPlatformHost(host) {
+  return host === 'localhost' || host === ROOT_DOMAIN || host.endsWith(`.${ROOT_DOMAIN}`)
+}
+
+function getRequestUrl(request, path = '/') {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${request.protocol}://${request.hostname}${normalizedPath}`
+}
+
+function setAuthCookie(reply, request, userId) {
   const options = {
     path: '/',
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7,
+    secure: request.protocol === 'https',
   }
 
-  if (ROOT_DOMAIN !== 'localhost') {
-    options.domain = `.${ROOT_DOMAIN}`
+  if (isPlatformHost(request.hostname)) {
+    if (request.hostname !== 'localhost' && !request.hostname.endsWith('.localhost')) {
+      options.domain = `.${ROOT_DOMAIN}`
+    }
   }
 
   reply.setCookie('userId', userId, options)
 }
 
-function clearAuthCookie(reply) {
+function clearAuthCookie(reply, request) {
   const options = { path: '/' }
 
-  if (ROOT_DOMAIN !== 'localhost') {
-    options.domain = `.${ROOT_DOMAIN}`
+  if (isPlatformHost(request.hostname)) {
+    if (request.hostname !== 'localhost' && !request.hostname.endsWith('.localhost')) {
+      options.domain = `.${ROOT_DOMAIN}`
+    }
   }
 
   reply.clearCookie('userId', options)
@@ -74,6 +89,22 @@ function isValidCustomDomain(domain) {
   if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return false
 
   return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain)
+}
+
+async function verifyCustomDomainDns(domain) {
+  if (!domain || !SERVER_IP) {
+    return { verified: false, addresses: [] }
+  }
+
+  try {
+    const addresses = await dns.resolve4(domain)
+    return {
+      verified: addresses.includes(SERVER_IP),
+      addresses,
+    }
+  } catch {
+    return { verified: false, addresses: [] }
+  }
 }
 
 async function resolveHost(request) {
@@ -177,13 +208,40 @@ function getMainUrl(path = '/') {
   return `http://${ROOT_DOMAIN}:${PORT}${path}`
 }
 
-function getNavUrls(authUser) {
+function getProfileUrl(request, authUser) {
+  if (!authUser) {
+    return request ? getRequestUrl(request, '/login') : getMainUrl('/login')
+  }
+
+  if (!request) {
+    return `${getSiteUrl(authUser.tenant.subdomain)}/edit`
+  }
+
+  const host = request.hostname
+
+  if (authUser.tenant.customDomain === host) {
+    return getRequestUrl(request, '/edit')
+  }
+
+  if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+    const subdomain = host.slice(0, -(ROOT_DOMAIN.length + 1))
+    if (subdomain === authUser.tenant.subdomain && !subdomain.includes('.')) {
+      return getRequestUrl(request, '/edit')
+    }
+  }
+
+  return `${getSiteUrl(authUser.tenant.subdomain)}/edit`
+}
+
+function getNavUrls(request, authUser) {
+  const base = request ? getRequestUrl(request, '/') : getMainUrl()
+
   return {
-    mainUrl: getMainUrl(),
-    loginUrl: getMainUrl('/login'),
-    registerUrl: getMainUrl('/register'),
-    profileUrl: authUser ? `${getSiteUrl(authUser.tenant.subdomain)}/edit` : getMainUrl('/login'),
-    logoutUrl: getMainUrl('/logout'),
+    mainUrl: base,
+    loginUrl: request ? getRequestUrl(request, '/login') : getMainUrl('/login'),
+    registerUrl: request ? getRequestUrl(request, '/register') : getMainUrl('/register'),
+    profileUrl: getProfileUrl(request, authUser),
+    logoutUrl: request ? getRequestUrl(request, '/logout') : getMainUrl('/logout'),
   }
 }
 
@@ -296,7 +354,7 @@ async function renderPage(reply, template, data, request) {
     meta: data.meta ?? null,
     body,
     authUser,
-    ...getNavUrls(authUser),
+    ...getNavUrls(request, authUser),
   })
 
   return reply.type('text/html').send(html)
@@ -307,25 +365,33 @@ async function renderTenantNotFound(reply, request, subdomain) {
   const body = await ejs.renderFile(path.join(__dirname, 'views', 'tenant-not-found.ejs'), {
     subdomain,
     rootDomain: ROOT_DOMAIN,
-    mainUrl: getMainUrl(),
+    mainUrl: getRequestUrl(request, '/'),
+    registerUrl: getRequestUrl(request, '/register'),
   })
   const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
     title: 'Site not found',
     meta: null,
     body,
     authUser,
-    ...getNavUrls(authUser),
+    ...getNavUrls(request, authUser),
   })
 
   return reply.code(404).type('text/html').send(html)
 }
 
 async function renderProfileEdit(reply, request, user, { error = null, success = null } = {}) {
+  let customDomainVerified = false
+  if (user.tenant.customDomain) {
+    const dnsCheck = await verifyCustomDomainDns(user.tenant.customDomain)
+    customDomainVerified = dnsCheck.verified
+  }
+
   return renderPage(reply, 'profile-edit.ejs', {
     title: 'Edit profile',
     user,
     rootDomain: ROOT_DOMAIN,
     serverIp: SERVER_IP,
+    customDomainVerified,
     error,
     success,
   }, request)
@@ -377,23 +443,19 @@ async function renderPublicProfile(request, reply, subdomain) {
     memberSince: formatProfileDate(user.createdAt),
     siteCreated: formatProfileDate(user.tenant.createdAt),
     meta: buildPublicProfileMeta(user, subdomain),
-    loginUrl: getMainUrl('/login'),
+    loginUrl: getRequestUrl(request, '/login'),
   }, request)
 }
 
-async function renderSubdomainEdit(request, reply, subdomain, { isCustomDomain = false } = {}) {
+async function renderSubdomainEdit(request, reply, subdomain) {
   const authUser = await getAuthUser(request.cookies.userId)
-
-  if (isCustomDomain) {
-    return reply.redirect(`${getSiteUrl(subdomain)}/edit`)
-  }
 
   if (!authUser || authUser.tenant.subdomain !== subdomain) {
     if (wantsJson(request)) {
       return reply.code(401).send({ error: 'not authenticated' })
     }
 
-    return reply.redirect(getMainUrl('/login'))
+    return reply.redirect(getRequestUrl(request, '/login'))
   }
 
   if (wantsJson(request)) {
@@ -426,6 +488,31 @@ app.get('/internal/caddy-ask', async (request, reply) => {
   return tenant ? reply.code(200).send('ok') : reply.code(403).send()
 })
 
+app.get('/api/custom-domain/verify', async (request, reply) => {
+  const authUser = await getAuthUser(request.cookies.userId)
+  if (!authUser) {
+    return reply.code(401).send({ error: 'not authenticated' })
+  }
+
+  const domain = normalizeCustomDomain(request.query.domain) || authUser.tenant.customDomain
+  if (!domain) {
+    return { domain: null, verified: false, status: 'none' }
+  }
+
+  if (!isValidCustomDomain(domain)) {
+    return reply.code(400).send({ error: 'invalid domain' })
+  }
+
+  const dnsCheck = await verifyCustomDomainDns(domain)
+  return {
+    domain,
+    verified: dnsCheck.verified,
+    expectedIp: SERVER_IP || null,
+    addresses: dnsCheck.addresses,
+    status: dnsCheck.verified ? 'valid' : 'pending',
+  }
+})
+
 app.get('/', async (request, reply) => {
   const hostCtx = await resolveHost(request)
   const subdomain = getSubdomainFromContext(hostCtx)
@@ -450,12 +537,6 @@ app.get('/', async (request, reply) => {
 })
 
 app.get('/register', async (request, reply) => {
-  const hostCtx = await resolveHost(request)
-
-  if (hostCtx.type !== 'main') {
-    return reply.redirect(getMainUrl('/register'))
-  }
-
   return renderPage(reply, 'register.ejs', {
     title: 'Register',
     error: null,
@@ -464,12 +545,6 @@ app.get('/register', async (request, reply) => {
 })
 
 app.post('/register', async (request, reply) => {
-  const hostCtx = await resolveHost(request)
-
-  if (hostCtx.type !== 'main') {
-    return reply.redirect(getMainUrl('/register'))
-  }
-
   const { username, email, password } = request.body
 
   if (!username || !email || !password) {
@@ -536,7 +611,7 @@ app.post('/register', async (request, reply) => {
     })
   })
 
-  setAuthCookie(reply, user.id)
+  setAuthCookie(reply, request, user.id)
 
   if (wantsJson(request)) {
     return reply.code(201).send({ isLoggedIn: true, userId: user.id })
@@ -556,23 +631,15 @@ app.get('/edit', async (request, reply) => {
   if (!subdomain) {
     const authUser = await getAuthUser(request.cookies.userId)
     if (authUser) {
-      return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
+      return reply.redirect(getProfileUrl(request, authUser))
     }
-    return reply.redirect(getMainUrl('/login'))
+    return reply.redirect(getRequestUrl(request, '/login'))
   }
 
-  return renderSubdomainEdit(request, reply, subdomain, {
-    isCustomDomain: hostCtx.isCustomDomain,
-  })
+  return renderSubdomainEdit(request, reply, subdomain)
 })
 
 app.get('/login', async (request, reply) => {
-  const hostCtx = await resolveHost(request)
-
-  if (hostCtx.type !== 'main') {
-    return reply.redirect(getMainUrl('/login'))
-  }
-
   return renderPage(reply, 'login.ejs', {
     title: 'Login',
     error: null,
@@ -581,12 +648,6 @@ app.get('/login', async (request, reply) => {
 })
 
 app.post('/login', async (request, reply) => {
-  const hostCtx = await resolveHost(request)
-
-  if (hostCtx.type !== 'main') {
-    return reply.redirect(getMainUrl('/login'))
-  }
-
   const { email, password } = request.body
 
   if (!email || !password) {
@@ -632,18 +693,18 @@ app.post('/login', async (request, reply) => {
     }, request)
   }
 
-  setAuthCookie(reply, user.id)
+  setAuthCookie(reply, request, user.id)
 
   if (wantsJson(request)) {
     return { isLoggedIn: true, userId: user.id }
   }
 
-  return reply.redirect(`${getSiteUrl(user.tenant.subdomain)}/edit`)
+  return reply.redirect(getProfileUrl(request, user))
 })
 
 app.get('/logout', async (request, reply) => {
-  clearAuthCookie(reply)
-  return reply.redirect(getMainUrl('/login'))
+  clearAuthCookie(reply, request)
+  return reply.redirect(getRequestUrl(request, '/login'))
 })
 
 app.post('/edit', async (request, reply) => {
@@ -656,10 +717,14 @@ app.post('/edit', async (request, reply) => {
       return reply.code(401).send({ error: 'not authenticated' })
     }
 
-    return reply.redirect(getMainUrl('/login'))
+    return reply.redirect(getRequestUrl(request, '/login'))
   }
 
-  if (hostCtx.isCustomDomain || !currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
+  if (hostCtx.isCustomDomain) {
+    if (authUser.tenant.customDomain !== request.hostname) {
+      return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
+    }
+  } else if (!currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
