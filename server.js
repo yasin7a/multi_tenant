@@ -4,7 +4,6 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import formbody from '@fastify/formbody'
 import fastifyStatic from '@fastify/static'
-import view from '@fastify/view'
 import ejs from 'ejs'
 import bcrypt from 'bcryptjs'
 import { prisma } from './lib/prisma.js'
@@ -15,10 +14,6 @@ const app = Fastify({ logger: true })
 await app.register(cookie)
 await app.register(formbody)
 await app.register(fastifyStatic, { root: path.join(__dirname, 'public') })
-await app.register(view, {
-  engine: { ejs },
-  root: path.join(__dirname, 'views'),
-})
 
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
 const PORT = process.env.PORT || 3000
@@ -88,34 +83,6 @@ function getNavUrls(authUser) {
   }
 }
 
-async function renderProfileEdit(reply, request, user, { error = null, success = null } = {}) {
-  return renderPage(reply, 'profile-edit.ejs', {
-    title: 'Edit profile',
-    user,
-    siteUrl: getSiteUrl(user.tenant.subdomain),
-    rootDomain: ROOT_DOMAIN,
-    error,
-    success,
-  }, request)
-}
-
-async function renderTenantNotFound(reply, request, subdomain) {
-  const authUser = await getAuthUser(request.cookies.userId)
-  const body = await ejs.renderFile(path.join(__dirname, 'views', 'tenant-not-found.ejs'), {
-    subdomain,
-    rootDomain: ROOT_DOMAIN,
-    mainUrl: getMainUrl(),
-  })
-  const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
-    title: 'Site not found',
-    body,
-    authUser,
-    ...getNavUrls(authUser),
-  })
-
-  return reply.code(404).type('text/html').send(html)
-}
-
 function wantsJson(request) {
   const accept = request.headers.accept || ''
   return accept.includes('application/json') && !accept.includes('text/html')
@@ -149,6 +116,33 @@ async function renderPage(reply, template, data, request) {
   return reply.type('text/html').send(html)
 }
 
+async function renderTenantNotFound(reply, request, subdomain) {
+  const authUser = await getAuthUser(request.cookies.userId)
+  const body = await ejs.renderFile(path.join(__dirname, 'views', 'tenant-not-found.ejs'), {
+    subdomain,
+    rootDomain: ROOT_DOMAIN,
+    mainUrl: getMainUrl(),
+  })
+  const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
+    title: 'Site not found',
+    body,
+    authUser,
+    ...getNavUrls(authUser),
+  })
+
+  return reply.code(404).type('text/html').send(html)
+}
+
+async function renderProfileEdit(reply, request, user, { error = null, success = null } = {}) {
+  return renderPage(reply, 'profile-edit.ejs', {
+    title: 'Edit profile',
+    user,
+    rootDomain: ROOT_DOMAIN,
+    error,
+    success,
+  }, request)
+}
+
 async function getPublicProfile(subdomain) {
   return prisma.user.findFirst({
     where: { tenant: { subdomain } },
@@ -160,21 +154,7 @@ async function getPublicProfile(subdomain) {
   })
 }
 
-async function publicProfilePageHandler(request, reply) {
-  const subdomain = getSubdomain(request)
-
-  if (!subdomain) {
-    if (wantsJson(request)) {
-      return reply.code(400).send({ error: 'visit a tenant subdomain to view their site' })
-    }
-
-    return renderPage(reply, 'error.ejs', {
-      title: 'Subdomain required',
-      message: 'Visit a tenant subdomain to view their site.',
-      subdomain: false,
-    }, request)
-  }
-
+async function renderPublicProfile(request, reply, subdomain) {
   const user = await getPublicProfile(subdomain)
 
   if (!user) {
@@ -201,56 +181,7 @@ async function publicProfilePageHandler(request, reply) {
   }, request)
 }
 
-async function publicSiteHandler(request, reply) {
-  const subdomain = getSubdomain(request)
-
-  if (!subdomain) {
-    if (wantsJson(request)) {
-      return reply.code(400).send({ error: 'visit a tenant subdomain to view their site' })
-    }
-
-    return renderPage(reply, 'error.ejs', {
-      title: 'Subdomain required',
-      message: 'Visit a tenant subdomain to view their site.',
-      subdomain: false,
-    }, request)
-  }
-
-  const user = await getPublicProfile(subdomain)
-
-  if (!user) {
-    if (wantsJson(request)) {
-      return reply.code(404).send({ error: 'site not found' })
-    }
-
-    return renderTenantNotFound(reply, request, subdomain)
-  }
-
-  if (wantsJson(request)) {
-    return {
-      username: user.username,
-      tenantId: user.tenantId,
-      tenant: user.tenant,
-    }
-  }
-
-  return renderPage(reply, 'site.ejs', {
-    title: `${user.username}'s site`,
-    user,
-  }, request)
-}
-
-async function subdomainPublicHandler(request, reply) {
-  return publicProfilePageHandler(request, reply)
-}
-
-async function subdomainEditHandler(request, reply) {
-  const subdomain = getSubdomain(request)
-
-  if (!subdomain) {
-    return reply.redirect(getMainUrl('/'))
-  }
-
+async function renderSubdomainEdit(request, reply, subdomain) {
   const authUser = await getAuthUser(request.cookies.userId)
 
   if (!authUser || authUser.tenant.subdomain !== subdomain) {
@@ -262,7 +193,14 @@ async function subdomainEditHandler(request, reply) {
   }
 
   if (wantsJson(request)) {
-    return authProfileJson(authUser)
+    return {
+      isLoggedIn: true,
+      userId: authUser.id,
+      username: authUser.username,
+      email: authUser.email,
+      tenantId: authUser.tenantId,
+      tenant: authUser.tenant,
+    }
   }
 
   return renderProfileEdit(reply, request, authUser)
@@ -272,7 +210,7 @@ app.get('/', async (request, reply) => {
   const subdomain = getSubdomain(request)
 
   if (subdomain) {
-    return subdomainPublicHandler(request, reply)
+    return renderPublicProfile(request, reply, subdomain)
   }
 
   if (wantsJson(request)) {
@@ -281,8 +219,6 @@ app.get('/', async (request, reply) => {
 
   return renderPage(reply, 'home.ejs', { title: 'Multi Tenant App' }, request)
 })
-
-app.get('/site', publicSiteHandler)
 
 app.get('/register', async (request, reply) => {
   if (getSubdomain(request)) {
@@ -360,7 +296,7 @@ app.post('/register', async (request, reply) => {
         password: hashedPassword,
         tenantId: tenant.id,
       },
-      select: { id: true, username: true, email: true, tenantId: true },
+      select: { id: true },
     })
   })
 
@@ -374,7 +310,9 @@ app.post('/register', async (request, reply) => {
 })
 
 app.get('/edit', async (request, reply) => {
-  if (!getSubdomain(request)) {
+  const subdomain = getSubdomain(request)
+
+  if (!subdomain) {
     const authUser = await getAuthUser(request.cookies.userId)
     if (authUser) {
       return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
@@ -382,7 +320,7 @@ app.get('/edit', async (request, reply) => {
     return reply.redirect(getMainUrl('/login'))
   }
 
-  return subdomainEditHandler(request, reply)
+  return renderSubdomainEdit(request, reply, subdomain)
 })
 
 app.get('/login', async (request, reply) => {
@@ -461,17 +399,6 @@ app.get('/logout', async (request, reply) => {
   return reply.redirect(getMainUrl('/login'))
 })
 
-function authProfileJson(user) {
-  return {
-    isLoggedIn: true,
-    userId: user.id,
-    username: user.username,
-    email: user.email,
-    tenantId: user.tenantId,
-    tenant: user.tenant,
-  }
-}
-
 app.post('/edit', async (request, reply) => {
   const subdomain = getSubdomain(request)
   const authUser = await getAuthUser(request.cookies.userId)
@@ -537,7 +464,14 @@ app.post('/edit', async (request, reply) => {
   })
 
   if (wantsJson(request)) {
-    return authProfileJson(updatedUser)
+    return {
+      isLoggedIn: true,
+      userId: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      tenantId: updatedUser.tenantId,
+      tenant: updatedUser.tenant,
+    }
   }
 
   return renderProfileEdit(reply, request, updatedUser, {
