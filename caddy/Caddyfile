@@ -1,10 +1,13 @@
 {
 	email takitahmid20@gmail.com
 
-	# Custom domains only — platform subdomains use the wildcard cert below.
 	on_demand_tls {
 		ask http://127.0.0.1:3000/internal/caddy-ask
 	}
+}
+
+:80 {
+	reverse_proxy 127.0.0.1:3000
 }
 
 __ROOT_DOMAIN__, *.__ROOT_DOMAIN__ {
