@@ -388,6 +388,24 @@ input:disabled {
   gap: 0.75rem;
 }
 
+.metadata-section h2 {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.info-item a {
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.info-item a:hover {
+  color: #a7f3d0;
+}
+
 .info-item {
   padding: 0.9rem 1rem;
   background: rgba(0, 0, 0, 0.2);

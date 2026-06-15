@@ -82,6 +82,31 @@ function getSiteUrl(subdomain) {
   return `http://${subdomain}.${ROOT_DOMAIN}:${PORT}`
 }
 
+function formatProfileDate(date) {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function buildPublicProfileMeta(user, subdomain) {
+  const profileUrl = getSiteUrl(subdomain)
+  const description = `Public profile of ${user.username} at ${subdomain}.${ROOT_DOMAIN}`
+  const imageUrl = user.imageUrl ? `${profileUrl}${user.imageUrl}` : null
+
+  return {
+    description,
+    canonical: profileUrl,
+    ogType: 'profile',
+    ogTitle: `${user.username}'s profile`,
+    ogDescription: description,
+    ogUrl: profileUrl,
+    ogImage: imageUrl,
+    twitterCard: imageUrl ? 'summary_large_image' : 'summary',
+  }
+}
+
 function getMainUrl(path = '/') {
   return `http://${ROOT_DOMAIN}:${PORT}${path}`
 }
@@ -192,7 +217,7 @@ async function getAuthUser(userId) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, subdomain: true } },
+      tenant: { select: { id: true, subdomain: true, createdAt: true } },
     },
   })
 }
@@ -202,6 +227,7 @@ async function renderPage(reply, template, data, request) {
   const body = await ejs.renderFile(path.join(__dirname, 'views', template), data)
   const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
     title: data.title,
+    meta: data.meta ?? null,
     body,
     authUser,
     ...getNavUrls(authUser),
@@ -246,7 +272,7 @@ async function getPublicProfile(subdomain) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, subdomain: true } },
+      tenant: { select: { id: true, subdomain: true, createdAt: true } },
     },
   })
 }
@@ -273,10 +299,16 @@ async function renderPublicProfile(request, reply, subdomain) {
     }
   }
 
+  const profileUrl = getSiteUrl(subdomain)
+
   return renderPage(reply, 'profile-public.ejs', {
     title: `${user.username}'s profile`,
     user,
     rootDomain: ROOT_DOMAIN,
+    profileUrl,
+    memberSince: formatProfileDate(user.createdAt),
+    siteCreated: formatProfileDate(user.tenant.createdAt),
+    meta: buildPublicProfileMeta(user, subdomain),
     loginUrl: getMainUrl('/login'),
   }, request)
 }
@@ -613,7 +645,7 @@ app.post('/edit', async (request, reply) => {
           imageUrl: true,
           createdAt: true,
           tenantId: true,
-          tenant: { select: { id: true, subdomain: true } },
+          tenant: { select: { id: true, subdomain: true, createdAt: true } },
         },
       })
     })
