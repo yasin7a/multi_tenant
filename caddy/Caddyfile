@@ -1,6 +1,5 @@
-# Caddy — replaces nginx
-# Main domain: multi.takitahmid.com
-# Subdomains + custom domains: on-demand SSL (via /internal/caddy-ask)
+# All domains (main + subdomains + custom) use on-demand SSL.
+# App must approve each host via /internal/caddy-ask
 
 {
 	email ACME_EMAIL_PLACEHOLDER
@@ -10,21 +9,6 @@
 	}
 }
 
-# Main domain only — do NOT use *.wildcard here (needs DNS challenge, fails to start)
-multi.takitahmid.com {
-	request_body {
-		max_size 6MB
-	}
-
-	reverse_proxy 127.0.0.1:3000 {
-		header_up Host {host}
-		header_up X-Real-IP {remote_host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
-	}
-}
-
-# user.multi.takitahmid.com + user custom domains
 https:// {
 	tls {
 		on_demand
@@ -37,7 +21,5 @@ https:// {
 	reverse_proxy 127.0.0.1:3000 {
 		header_up Host {host}
 		header_up X-Real-IP {remote_host}
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
 	}
 }
