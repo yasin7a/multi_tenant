@@ -197,7 +197,7 @@ app.get('/', async (request, reply) => {
     return { message: 'server is ok' }
   }
 
-  return renderPage(reply, 'home.ejs', { title: 'Multi Tenant App' }, request)
+  return renderPage(reply, 'home.ejs', { title: 'Look at you Idiot' }, request)
 })
 
 app.get('/site', publicSiteHandler)
