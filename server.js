@@ -21,15 +21,16 @@ const ALLOWED_IMAGE_TYPES = {
   'image/gif': '.gif',
   'image/webp': '.webp',
 }
-const app = Fastify({ logger: true })
+const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
+const PORT = process.env.PORT || 3000
+const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, '')
+
+const app = Fastify({ logger: true, trustProxy: true })
 
 await app.register(cookie)
 await app.register(formbody)
 await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } })
 await app.register(fastifyStatic, { root: path.join(__dirname, 'public') })
-
-const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
-const PORT = process.env.PORT || 3000
 
 function setAuthCookie(reply, userId) {
   const options = {
@@ -79,6 +80,11 @@ function getSubdomain(request) {
 }
 
 function getSiteUrl(subdomain) {
+  if (PUBLIC_URL) {
+    const protocol = PUBLIC_URL.startsWith('https') ? 'https' : 'http'
+    return `${protocol}://${subdomain}.${ROOT_DOMAIN}`
+  }
+
   return `http://${subdomain}.${ROOT_DOMAIN}:${PORT}`
 }
 
@@ -108,6 +114,10 @@ function buildPublicProfileMeta(user, subdomain) {
 }
 
 function getMainUrl(path = '/') {
+  if (PUBLIC_URL) {
+    return `${PUBLIC_URL}${path}`
+  }
+
   return `http://${ROOT_DOMAIN}:${PORT}${path}`
 }
 
