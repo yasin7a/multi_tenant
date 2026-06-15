@@ -16,11 +16,14 @@ sudo certbot certonly --manual --preferred-challenges dns \
   -d multi.takitahmid.com -d '*.multi.takitahmid.com'
 ```
 
-**Caddy:**
+**Caddy** (app must be running on :3000 first):
 
 ```bash
+pm2 restart multi-tenant
 sudo bash scripts/setup-caddy.sh
 ```
+
+If still down: `journalctl -u caddy -n 20`
 
 Renew: `sudo certbot renew && sudo systemctl reload caddy`
 
