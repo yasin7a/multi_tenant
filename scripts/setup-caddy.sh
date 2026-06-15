@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # Run on Ubuntu/Debian server as root or with sudo.
-# Usage: sudo bash scripts/setup-caddy.sh
+# Usage: sudo ACME_EMAIL=you@email.com bash scripts/setup-caddy.sh
 
 APP_DIR="${APP_DIR:-/var/www/multi_tenant}"
-ACME_EMAIL="${ACME_EMAIL:-takitahmid@gmail.com}"
+ACME_EMAIL="${ACME_EMAIL:-admin@takitahmid.com}"
 
 echo "==> Installing Caddy..."
 if ! command -v caddy >/dev/null 2>&1; then
@@ -19,15 +19,11 @@ if ! command -v caddy >/dev/null 2>&1; then
   apt-get install -y caddy
 fi
 
-echo "==> Copying Caddyfile..."
-cp "$APP_DIR/caddy/Caddyfile" /etc/caddy/Caddyfile
+echo "==> Copying Caddyfile (email: $ACME_EMAIL)..."
+sed "s/ACME_EMAIL_PLACEHOLDER/$ACME_EMAIL/" "$APP_DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
 
-echo "==> Setting ACME email for Caddy..."
-mkdir -p /etc/systemd/system/caddy.service.d
-cat > /etc/systemd/system/caddy.service.d/override.conf <<EOF
-[Service]
-Environment=ACME_EMAIL=$ACME_EMAIL
-EOF
+echo "==> Validating Caddyfile..."
+caddy validate --config /etc/caddy/Caddyfile
 
 echo "==> Stopping nginx (Caddy uses ports 80 and 443)..."
 if systemctl is-active --quiet nginx; then
@@ -38,9 +34,10 @@ fi
 echo "==> Starting Caddy..."
 systemctl daemon-reload
 systemctl enable caddy
-systemctl reload caddy
+systemctl restart caddy
 
-echo "==> Done. Check status:"
-systemctl status caddy --no-pager
+echo "==> Done. Status:"
+systemctl status caddy --no-pager || true
 echo ""
-echo "App must be running on 127.0.0.1:3000 (pm2 start server.js --name multi-tenant)"
+echo "If failed, run: journalctl -xeu caddy.service --no-pager | tail -30"
+echo "App must be running: pm2 start server.js --name multi-tenant"

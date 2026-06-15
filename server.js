@@ -415,7 +415,34 @@ async function renderSubdomainEdit(request, reply, subdomain, { isCustomDomain =
 app.get('/internal/caddy-ask', async (request, reply) => {
   const domain = normalizeCustomDomain(request.query.domain)
 
-  if (!domain || !isValidCustomDomain(domain)) {
+  if (!domain) {
+    return reply.code(403).send()
+  }
+
+  if (domain === ROOT_DOMAIN) {
+    return reply.code(200).send('ok')
+  }
+
+  if (domain.endsWith(`.${ROOT_DOMAIN}`)) {
+    const subdomain = domain.slice(0, -(ROOT_DOMAIN.length + 1))
+
+    if (!subdomain || subdomain.includes('.')) {
+      return reply.code(403).send()
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { subdomain },
+      select: { id: true },
+    })
+
+    if (tenant) {
+      return reply.code(200).send('ok')
+    }
+
+    return reply.code(403).send()
+  }
+
+  if (!isValidCustomDomain(domain)) {
     return reply.code(403).send()
   }
 

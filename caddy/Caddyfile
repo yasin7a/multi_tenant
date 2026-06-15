@@ -1,9 +1,9 @@
-# Caddy — replaces nginx entirely
-# Platform: multi.takitahmid.com + *.multi.takitahmid.com (auto SSL)
-# Custom domains: on-demand SSL (only if domain saved in app DB)
+# Caddy — replaces nginx
+# Main domain: multi.takitahmid.com
+# Subdomains + custom domains: on-demand SSL (via /internal/caddy-ask)
 
 {
-	email {$ACME_EMAIL:admin@takitahmid.com}
+	email ACME_EMAIL_PLACEHOLDER
 
 	on_demand_tls {
 		ask http://127.0.0.1:3000/internal/caddy-ask
@@ -12,8 +12,8 @@
 	}
 }
 
-# Main app + user subdomains
-multi.takitahmid.com, *.multi.takitahmid.com {
+# Main domain only — do NOT use *.wildcard here (needs DNS challenge, fails to start)
+multi.takitahmid.com {
 	request_body {
 		max_size 6MB
 	}
@@ -26,8 +26,8 @@ multi.takitahmid.com, *.multi.takitahmid.com {
 	}
 }
 
-# User custom domains (SSL issued automatically on first visit)
-:443 {
+# user.multi.takitahmid.com + user custom domains
+https:// {
 	tls {
 		on_demand
 	}
