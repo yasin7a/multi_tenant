@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: sudo ACME_EMAIL=you@email.com bash scripts/setup-caddy.sh
 
 APP_DIR="${APP_DIR:-/var/www/multi_tenant}"
-ACME_EMAIL="${ACME_EMAIL:-admin@takitahmid.com}"
+ACME_EMAIL="${ACME_EMAIL:-takitahmid20@gmail.com}"
 
 echo "==> Installing Caddy..."
 if ! command -v caddy >/dev/null 2>&1; then
