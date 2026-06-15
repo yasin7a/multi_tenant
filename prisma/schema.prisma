@@ -20,6 +20,7 @@ model User {
   username  String   @unique
   email     String   @unique
   password  String
+  imageUrl  String?
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime @default(now())

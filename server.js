@@ -1,18 +1,31 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createWriteStream } from 'node:fs'
+import fs from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { pipeline } from 'node:stream/promises'
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import formbody from '@fastify/formbody'
+import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
 import ejs from 'ejs'
 import bcrypt from 'bcryptjs'
 import { prisma } from './lib/prisma.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads')
+const ALLOWED_IMAGE_TYPES = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+}
 const app = Fastify({ logger: true })
 
 await app.register(cookie)
 await app.register(formbody)
+await app.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } })
 await app.register(fastifyStatic, { root: path.join(__dirname, 'public') })
 
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
@@ -88,6 +101,63 @@ function wantsJson(request) {
   return accept.includes('application/json') && !accept.includes('text/html')
 }
 
+async function parseEditRequest(request) {
+  const contentType = request.headers['content-type'] || ''
+
+  if (contentType.includes('multipart/form-data')) {
+    const fields = {}
+    let imageFile = null
+
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname === 'image') {
+          imageFile = part
+        } else {
+          part.file.resume()
+        }
+      } else {
+        fields[part.fieldname] = part.value
+      }
+    }
+
+    return { ...fields, imageFile }
+  }
+
+  return { ...request.body, imageFile: null }
+}
+
+async function saveProfileImage(part) {
+  if (!part?.filename) {
+    return { imageUrl: null }
+  }
+
+  const ext = ALLOWED_IMAGE_TYPES[part.mimetype]
+  if (!ext) {
+    return { error: 'Invalid image type. Use JPEG, PNG, GIF, or WebP.' }
+  }
+
+  const filename = `${randomBytes(16).toString('hex')}${ext}`
+  const filepath = path.join(UPLOADS_DIR, filename)
+
+  await pipeline(part.file, createWriteStream(filepath))
+
+  return { imageUrl: `/uploads/${filename}` }
+}
+
+async function deleteProfileImage(imageUrl) {
+  if (!imageUrl?.startsWith('/uploads/')) {
+    return
+  }
+
+  const filepath = path.join(UPLOADS_DIR, path.basename(imageUrl))
+
+  try {
+    await fs.unlink(filepath)
+  } catch {
+    // ignore missing files
+  }
+}
+
 async function getAuthUser(userId) {
   if (!userId) return null
 
@@ -97,6 +167,8 @@ async function getAuthUser(userId) {
       id: true,
       username: true,
       email: true,
+      imageUrl: true,
+      createdAt: true,
       tenantId: true,
       tenant: { select: { id: true, name: true, subdomain: true } },
     },
@@ -148,6 +220,9 @@ async function getPublicProfile(subdomain) {
     where: { tenant: { subdomain } },
     select: {
       username: true,
+      email: true,
+      imageUrl: true,
+      createdAt: true,
       tenantId: true,
       tenant: { select: { id: true, name: true, subdomain: true } },
     },
@@ -168,6 +243,9 @@ async function renderPublicProfile(request, reply, subdomain) {
   if (wantsJson(request)) {
     return {
       username: user.username,
+      email: user.email,
+      imageUrl: user.imageUrl,
+      createdAt: user.createdAt,
       tenantId: user.tenantId,
       tenant: user.tenant,
     }
@@ -198,6 +276,8 @@ async function renderSubdomainEdit(request, reply, subdomain) {
       userId: authUser.id,
       username: authUser.username,
       email: authUser.email,
+      imageUrl: authUser.imageUrl,
+      createdAt: authUser.createdAt,
       tenantId: authUser.tenantId,
       tenant: authUser.tenant,
     }
@@ -415,7 +495,7 @@ app.post('/edit', async (request, reply) => {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
-  const { username, email, tenantName } = request.body
+  const { username, email, tenantName, imageFile } = await parseEditRequest(request)
   const newSubdomain = username.toLowerCase().trim()
 
   if (!username || !email || !tenantName) {
@@ -469,6 +549,27 @@ app.post('/edit', async (request, reply) => {
     }
   }
 
+  let imageUrl = authUser.imageUrl
+
+  if (imageFile?.filename) {
+    const imageResult = await saveProfileImage(imageFile)
+
+    if (imageResult.error) {
+      if (wantsJson(request)) {
+        return reply.code(400).send({ error: imageResult.error })
+      }
+
+      return renderProfileEdit(reply, request, authUser, {
+        error: imageResult.error,
+      })
+    }
+
+    if (imageResult.imageUrl) {
+      await deleteProfileImage(authUser.imageUrl)
+      imageUrl = imageResult.imageUrl
+    }
+  }
+
   const updatedUser = await prisma.$transaction(async (tx) => {
     await tx.tenant.update({
       where: { id: authUser.tenantId },
@@ -477,11 +578,13 @@ app.post('/edit', async (request, reply) => {
 
     return tx.user.update({
       where: { id: authUser.id },
-      data: { username, email },
+      data: { username, email, imageUrl },
       select: {
         id: true,
         username: true,
         email: true,
+        imageUrl: true,
+        createdAt: true,
         tenantId: true,
         tenant: { select: { id: true, name: true, subdomain: true } },
       },
@@ -494,6 +597,8 @@ app.post('/edit', async (request, reply) => {
       userId: updatedUser.id,
       username: updatedUser.username,
       email: updatedUser.email,
+      imageUrl: updatedUser.imageUrl,
+      createdAt: updatedUser.createdAt,
       tenantId: updatedUser.tenantId,
       tenant: updatedUser.tenant,
     }

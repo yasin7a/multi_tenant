@@ -362,6 +362,27 @@ input:disabled {
   flex-shrink: 0;
 }
 
+.avatar-img {
+  object-fit: cover;
+  padding: 0;
+  background: none;
+}
+
+.avatar-lg {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  font-size: 2rem;
+}
+
+.profile-header-public {
+  align-items: flex-start;
+}
+
+.profile-header-public h1 {
+  margin-bottom: 0.15rem;
+}
+
 .info-grid {
   display: grid;
   gap: 0.75rem;

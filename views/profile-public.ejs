@@ -1,9 +1,14 @@
 <div class="card">
-  <div class="profile-header">
-    <div class="avatar"><%= user.username.charAt(0).toUpperCase() %></div>
+  <div class="profile-header profile-header-public">
+    <% if (user.imageUrl) { %>
+      <img class="avatar avatar-lg avatar-img" src="<%= user.imageUrl %>" alt="<%= user.username %>">
+    <% } else { %>
+      <div class="avatar avatar-lg"><%= user.username.charAt(0).toUpperCase() %></div>
+    <% } %>
     <div>
       <span class="badge">Public profile</span>
       <h1><%= user.username %></h1>
+      <p class="meta"><%= user.tenant.name %></p>
     </div>
   </div>
 
@@ -13,12 +18,20 @@
       <p><%= user.username %></p>
     </div>
     <div class="info-item">
+      <label>Email</label>
+      <p><%= user.email %></p>
+    </div>
+    <div class="info-item">
       <label>Tenant</label>
       <p><%= user.tenant.name %></p>
     </div>
     <div class="info-item">
       <label>Subdomain</label>
       <p><%= user.tenant.subdomain %>.<%= rootDomain %></p>
+    </div>
+    <div class="info-item">
+      <label>Member since</label>
+      <p><%= new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) %></p>
     </div>
   </div>
 

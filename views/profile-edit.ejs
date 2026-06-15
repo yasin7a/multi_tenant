@@ -1,6 +1,10 @@
 <div class="card">
   <div class="profile-header">
-    <div class="avatar"><%= user.username.charAt(0).toUpperCase() %></div>
+    <% if (user.imageUrl) { %>
+      <img class="avatar avatar-img" src="<%= user.imageUrl %>" alt="<%= user.username %>">
+    <% } else { %>
+      <div class="avatar"><%= user.username.charAt(0).toUpperCase() %></div>
+    <% } %>
     <div>
       <span class="badge">Your account</span>
       <h1><%= user.username %></h1>
@@ -10,7 +14,12 @@
   <% if (error) { %><div class="error"><%= error %></div><% } %>
   <% if (success) { %><div class="success"><%= success %></div><% } %>
 
-  <form method="post" action="/edit">
+  <form method="post" action="/edit" enctype="multipart/form-data">
+    <label>
+      Profile image
+      <input type="file" name="image" accept="image/jpeg,image/png,image/gif,image/webp">
+      <span class="meta">JPEG, PNG, GIF, or WebP. Max 5 MB.</span>
+    </label>
     <label>
       Username
       <input type="text" name="username" value="<%= user.username %>" required>
