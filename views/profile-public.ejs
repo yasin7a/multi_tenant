@@ -24,8 +24,6 @@
 
   <div class="actions">
     <a class="btn btn-secondary" href="/">View site</a>
-    <% if (!subdomain) { %>
-      <a class="btn" href="/login">Sign in</a>
-    <% } %>
+    <a class="btn" href="<%= loginUrl %>">Sign in</a>
   </div>
 </div>

@@ -89,7 +89,11 @@ async function renderTenantNotFound(reply, request, subdomain) {
     title: 'Site not found',
     body,
     authUser,
-    profileUrl: '/profile',
+    mainUrl: getMainUrl(),
+    loginUrl: getMainUrl('/login'),
+    registerUrl: getMainUrl('/register'),
+    profileUrl: getMainUrl('/profile'),
+    logoutUrl: getMainUrl('/logout'),
   })
 
   return reply.code(404).type('text/html').send(html)
@@ -122,7 +126,11 @@ async function renderPage(reply, template, data, request) {
     title: data.title,
     body,
     authUser,
-    profileUrl: '/profile',
+    mainUrl: getMainUrl(),
+    loginUrl: getMainUrl('/login'),
+    registerUrl: getMainUrl('/register'),
+    profileUrl: getMainUrl('/profile'),
+    logoutUrl: getMainUrl('/logout'),
   })
 
   return reply.type('text/html').send(html)
@@ -196,7 +204,7 @@ app.get('/site', publicSiteHandler)
 
 app.get('/register', async (request, reply) => {
   if (getSubdomain(request)) {
-    return reply.redirect('/')
+    return reply.redirect(getMainUrl('/register'))
   }
 
   return renderPage(reply, 'register.ejs', {
@@ -207,6 +215,10 @@ app.get('/register', async (request, reply) => {
 })
 
 app.post('/register', async (request, reply) => {
+  if (getSubdomain(request)) {
+    return reply.redirect(getMainUrl('/register'))
+  }
+
   const { username, email, password } = request.body
 
   if (!username || !email || !password) {
@@ -281,7 +293,7 @@ app.post('/register', async (request, reply) => {
 
 app.get('/login', async (request, reply) => {
   if (getSubdomain(request)) {
-    return reply.redirect('/')
+    return reply.redirect(getMainUrl('/login'))
   }
 
   return renderPage(reply, 'login.ejs', {
@@ -292,6 +304,10 @@ app.get('/login', async (request, reply) => {
 })
 
 app.post('/login', async (request, reply) => {
+  if (getSubdomain(request)) {
+    return reply.redirect(getMainUrl('/login'))
+  }
+
   const { email, password } = request.body
 
   if (!email || !password) {
@@ -345,7 +361,7 @@ app.post('/login', async (request, reply) => {
 
 app.get('/logout', async (request, reply) => {
   clearAuthCookie(reply)
-  return reply.redirect('/login')
+  return reply.redirect(getMainUrl('/login'))
 })
 
 function publicProfileJson(user) {
@@ -407,7 +423,7 @@ app.get('/profile', async (request, reply) => {
       title: `${publicUser.username}'s profile`,
       user: publicUser,
       rootDomain: ROOT_DOMAIN,
-      subdomain: true,
+      loginUrl: getMainUrl('/login'),
     }, request)
   }
 
