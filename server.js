@@ -106,12 +106,18 @@ async function parseEditRequest(request) {
 
   if (contentType.includes('multipart/form-data')) {
     const fields = {}
-    let imageFile = null
+    let newImageUrl = null
+    let imageError = null
 
     for await (const part of request.parts()) {
       if (part.type === 'file') {
-        if (part.fieldname === 'image') {
-          imageFile = part
+        if (part.fieldname === 'image' && part.filename) {
+          const result = await saveProfileImage(part)
+          if (result.error) {
+            imageError = result.error
+          } else {
+            newImageUrl = result.imageUrl
+          }
         } else {
           part.file.resume()
         }
@@ -120,10 +126,10 @@ async function parseEditRequest(request) {
       }
     }
 
-    return { ...fields, imageFile }
+    return { ...fields, newImageUrl, imageError }
   }
 
-  return { ...request.body, imageFile: null }
+  return { ...request.body, newImageUrl: null, imageError: null }
 }
 
 async function saveProfileImage(part) {
@@ -133,6 +139,7 @@ async function saveProfileImage(part) {
 
   const ext = ALLOWED_IMAGE_TYPES[part.mimetype]
   if (!ext) {
+    part.file.resume()
     return { error: 'Invalid image type. Use JPEG, PNG, GIF, or WebP.' }
   }
 
@@ -140,6 +147,11 @@ async function saveProfileImage(part) {
   const filepath = path.join(UPLOADS_DIR, filename)
 
   await pipeline(part.file, createWriteStream(filepath))
+
+  if (part.file.truncated) {
+    await fs.unlink(filepath).catch(() => {})
+    return { error: 'Image is too large. Max 5 MB.' }
+  }
 
   return { imageUrl: `/uploads/${filename}` }
 }
@@ -149,12 +161,22 @@ async function deleteProfileImage(imageUrl) {
     return
   }
 
-  const filepath = path.join(UPLOADS_DIR, path.basename(imageUrl))
+  const filename = path.basename(imageUrl)
+  if (!filename || filename.includes('..')) {
+    return
+  }
+
+  const filepath = path.resolve(UPLOADS_DIR, filename)
+  if (!filepath.startsWith(path.resolve(UPLOADS_DIR))) {
+    return
+  }
 
   try {
     await fs.unlink(filepath)
-  } catch {
-    // ignore missing files
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      app.log.warn({ err, imageUrl }, 'failed to delete profile image')
+    }
   }
 }
 
@@ -498,26 +520,45 @@ app.post('/edit', async (request, reply) => {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
-  const { username, email, imageFile } = await parseEditRequest(request)
-  const newSubdomain = username.toLowerCase().trim()
+  const { username, email, newImageUrl, imageError } = await parseEditRequest(request)
+  const newSubdomain = username?.toLowerCase().trim()
+  const previousImageUrl = authUser.imageUrl
 
-  if (!username || !email) {
+  const rejectEdit = async (options) => {
+    if (newImageUrl) {
+      await deleteProfileImage(newImageUrl)
+    }
+
     if (wantsJson(request)) {
-      return reply.code(400).send({ error: 'username and email are required' })
+      return reply.code(options.status).send({ error: options.error })
     }
 
     return renderProfileEdit(reply, request, authUser, {
-      error: 'Username and email are required.',
+      error: options.message,
+    })
+  }
+
+  if (imageError) {
+    return rejectEdit({
+      status: 400,
+      error: imageError,
+      message: imageError,
+    })
+  }
+
+  if (!username || !email) {
+    return rejectEdit({
+      status: 400,
+      error: 'username and email are required',
+      message: 'Username and email are required.',
     })
   }
 
   if (!/^[a-zA-Z0-9-]+$/.test(username)) {
-    if (wantsJson(request)) {
-      return reply.code(400).send({ error: 'username can only contain letters, numbers, and hyphens' })
-    }
-
-    return renderProfileEdit(reply, request, authUser, {
-      error: 'Username can only contain letters, numbers, and hyphens.',
+    return rejectEdit({
+      status: 400,
+      error: 'username can only contain letters, numbers, and hyphens',
+      message: 'Username can only contain letters, numbers, and hyphens.',
     })
   }
 
@@ -529,12 +570,10 @@ app.post('/edit', async (request, reply) => {
   })
 
   if (existing) {
-    if (wantsJson(request)) {
-      return reply.code(409).send({ error: 'username or email already exists' })
-    }
-
-    return renderProfileEdit(reply, request, authUser, {
-      error: 'Username or email already exists.',
+    return rejectEdit({
+      status: 409,
+      error: 'username or email already exists',
+      message: 'Username or email already exists.',
     })
   }
 
@@ -545,57 +584,50 @@ app.post('/edit', async (request, reply) => {
     })
 
     if (existingTenant) {
-      if (wantsJson(request)) {
-        return reply.code(409).send({ error: 'subdomain already taken' })
-      }
-
-      return renderProfileEdit(reply, request, authUser, {
-        error: 'That username is already taken as a subdomain.',
+      return rejectEdit({
+        status: 409,
+        error: 'subdomain already taken',
+        message: 'That username is already taken as a subdomain.',
       })
     }
   }
 
-  let imageUrl = authUser.imageUrl
+  const imageUrl = newImageUrl ?? authUser.imageUrl
 
-  if (imageFile?.filename) {
-    const imageResult = await saveProfileImage(imageFile)
+  let updatedUser
 
-    if (imageResult.error) {
-      if (wantsJson(request)) {
-        return reply.code(400).send({ error: imageResult.error })
-      }
-
-      return renderProfileEdit(reply, request, authUser, {
-        error: imageResult.error,
+  try {
+    updatedUser = await prisma.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: authUser.tenantId },
+        data: { subdomain: newSubdomain },
       })
+
+      return tx.user.update({
+        where: { id: authUser.id },
+        data: { username, email, imageUrl },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          imageUrl: true,
+          createdAt: true,
+          tenantId: true,
+          tenant: { select: { id: true, subdomain: true } },
+        },
+      })
+    })
+  } catch (err) {
+    if (newImageUrl) {
+      await deleteProfileImage(newImageUrl)
     }
 
-    if (imageResult.imageUrl) {
-      await deleteProfileImage(authUser.imageUrl)
-      imageUrl = imageResult.imageUrl
-    }
+    throw err
   }
 
-  const updatedUser = await prisma.$transaction(async (tx) => {
-    await tx.tenant.update({
-      where: { id: authUser.tenantId },
-      data: { subdomain: newSubdomain },
-    })
-
-    return tx.user.update({
-      where: { id: authUser.id },
-      data: { username, email, imageUrl },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        imageUrl: true,
-        createdAt: true,
-        tenantId: true,
-        tenant: { select: { id: true, subdomain: true } },
-      },
-    })
-  })
+  if (newImageUrl && previousImageUrl && previousImageUrl !== newImageUrl) {
+    await deleteProfileImage(previousImageUrl)
+  }
 
   if (wantsJson(request)) {
     return {
