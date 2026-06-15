@@ -83,7 +83,7 @@ function getNavUrls(authUser) {
     mainUrl: getMainUrl(),
     loginUrl: getMainUrl('/login'),
     registerUrl: getMainUrl('/register'),
-    profileUrl: authUser ? `${getSiteUrl(authUser.tenant.subdomain)}/edit` : getMainUrl('/profile'),
+    profileUrl: authUser ? `${getSiteUrl(authUser.tenant.subdomain)}/edit` : getMainUrl('/login'),
     logoutUrl: getMainUrl('/logout'),
   }
 }
@@ -461,14 +461,6 @@ app.get('/logout', async (request, reply) => {
   return reply.redirect(getMainUrl('/login'))
 })
 
-function publicProfileJson(user) {
-  return {
-    username: user.username,
-    tenantId: user.tenantId,
-    tenant: user.tenant,
-  }
-}
-
 function authProfileJson(user) {
   return {
     isLoggedIn: true,
@@ -479,25 +471,6 @@ function authProfileJson(user) {
     tenant: user.tenant,
   }
 }
-
-app.get('/profile', async (request, reply) => {
-  const subdomain = getSubdomain(request)
-  const authUser = await getAuthUser(request.cookies.userId)
-
-  if (!subdomain) {
-    if (!authUser) {
-      if (wantsJson(request)) {
-        return reply.code(401).send({ error: 'not authenticated' })
-      }
-
-      return reply.redirect(getMainUrl('/login'))
-    }
-
-    return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
-  }
-
-  return subdomainPublicHandler(request, reply)
-})
 
 app.post('/edit', async (request, reply) => {
   const subdomain = getSubdomain(request)
@@ -570,16 +543,6 @@ app.post('/edit', async (request, reply) => {
   return renderProfileEdit(reply, request, updatedUser, {
     success: 'Profile updated successfully.',
   })
-})
-
-app.post('/profile', async (request, reply) => {
-  const authUser = await getAuthUser(request.cookies.userId)
-
-  if (!authUser) {
-    return reply.redirect(getMainUrl('/login'))
-  }
-
-  return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
 })
 
 const start = async () => {
