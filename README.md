@@ -18,7 +18,7 @@ sudo bash scripts/setup-caddy.sh
 - Platform (`multi.takitahmid.com`, `*.multi.takitahmid.com`) → wildcard cert, instant HTTPS
 - User custom domains → on-demand TLS after DNS + profile save
 
-Renew wildcard: `sudo certbot renew && sudo systemctl reload caddy`
+Renew wildcard: `sudo certbot renew` (hook reloads Caddy automatically)
 
 If Caddy fails: `journalctl -u caddy -n 20`
 

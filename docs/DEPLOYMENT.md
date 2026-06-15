@@ -74,5 +74,5 @@ If Caddy failed: `sudo journalctl -u caddy -n 40 --no-pager`
 
 - Site down: `pm2 status` and `systemctl status caddy`
 - Wildcard cert missing: re-run certbot command in SSL section above, then `sudo bash scripts/setup-caddy.sh`
-- Renew wildcard: `sudo certbot renew && sudo systemctl reload caddy`
+- Renew wildcard: `sudo certbot renew` (hook reloads Caddy automatically)
 - Custom domain SSL: DNS A record → `SERVER_IP`, domain saved in profile, then `journalctl -u caddy -n 30`

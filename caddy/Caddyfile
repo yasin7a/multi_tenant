@@ -11,7 +11,7 @@
 }
 
 __ROOT_DOMAIN__, *.__ROOT_DOMAIN__ {
-	tls /etc/letsencrypt/live/__ROOT_DOMAIN__/fullchain.pem /etc/letsencrypt/live/__ROOT_DOMAIN__/privkey.pem
+	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
 
 	request_body {
 		max_size 6MB
