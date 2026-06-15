@@ -1,11 +1,28 @@
-# All domains (main + subdomains + custom) use on-demand SSL.
-# App must approve each host via /internal/caddy-ask
+# Platform subdomains: wildcard cert = instant load (404 or profile)
+# Custom domains: on-demand SSL (~5s first visit only)
+#
+# One-time wildcard cert:
+#   sudo certbot certonly --manual --preferred-challenges dns \
+#     -d multi.takitahmid.com -d *.multi.takitahmid.com
 
 {
 	email ACME_EMAIL_PLACEHOLDER
 
 	on_demand_tls {
 		ask http://127.0.0.1:3000/internal/caddy-ask
+	}
+}
+
+multi.takitahmid.com, *.multi.takitahmid.com {
+	tls /etc/letsencrypt/live/multi.takitahmid.com/fullchain.pem /etc/letsencrypt/live/multi.takitahmid.com/privkey.pem
+
+	request_body {
+		max_size 6MB
+	}
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
 	}
 }
 

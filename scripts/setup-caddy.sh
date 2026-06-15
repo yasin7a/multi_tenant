@@ -26,8 +26,23 @@ if ! command -v caddy >/dev/null 2>&1; then
   apt-get install -y caddy
 fi
 
+echo "==> Choosing Caddyfile..."
+WILDCARD_CERT="/etc/letsencrypt/live/multi.takitahmid.com/fullchain.pem"
+
+if [ -f "$WILDCARD_CERT" ]; then
+  echo "    Wildcard cert found — instant SSL for all platform subdomains."
+  CADDYFILE_TEMPLATE="$CADDYFILE_SRC"
+else
+  echo "    WARN: No wildcard cert at $WILDCARD_CERT"
+  echo "    First visit to each subdomain will be slow (~5s) while SSL is issued."
+  echo "    Fix: sudo certbot certonly --manual --preferred-challenges dns \\"
+  echo "           -d multi.takitahmid.com -d '*.multi.takitahmid.com'"
+  echo "         Then re-run: bash scripts/setup-caddy.sh"
+  CADDYFILE_TEMPLATE="$APP_DIR/caddy/Caddyfile.on-demand-only"
+fi
+
 echo "==> Copying Caddyfile (email: $ACME_EMAIL)..."
-sed "s/ACME_EMAIL_PLACEHOLDER/$ACME_EMAIL/" "$CADDYFILE_SRC" > /etc/caddy/Caddyfile
+sed "s/ACME_EMAIL_PLACEHOLDER/$ACME_EMAIL/" "$CADDYFILE_TEMPLATE" > /etc/caddy/Caddyfile
 
 echo "==> Validating Caddyfile..."
 caddy validate --config /etc/caddy/Caddyfile
