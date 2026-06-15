@@ -14,6 +14,7 @@ Grey cloud (DNS only).
 ```
 ROOT_DOMAIN=multi.takitahmid.com
 PUBLIC_URL=https://multi.takitahmid.com
+SERVER_IP=<server public IP>
 DATABASE_URL=postgresql://...
 PORT=3000
 ```
@@ -28,19 +29,13 @@ pm2 start server.js --name multi-tenant
 pm2 save
 ```
 
-## SSL (once)
-
-```bash
-sudo apt install -y certbot
-sudo certbot certonly --manual --preferred-challenges dns \
-  -d multi.takitahmid.com -d '*.multi.takitahmid.com'
-```
-
-## Caddy
+## Caddy (HTTPS + custom domains)
 
 ```bash
 sudo bash scripts/setup-caddy.sh
 ```
+
+Caddy terminates HTTPS and proxies to the app on port 3000. When a user adds a custom domain, they create an A record to `SERVER_IP` and save the domain in profile edit. Caddy asks the app (`/internal/caddy-ask`) whether to issue a certificate; only registered custom domains and platform hosts are approved.
 
 ## Update
 
@@ -52,5 +47,4 @@ pm2 restart multi-tenant
 ## Troubleshooting
 
 - Site down: `pm2 status` and `systemctl status caddy`
-- Cert missing: re-run certbot command above
-- Renew: `sudo certbot renew && sudo systemctl reload caddy`
+- Custom domain SSL: confirm DNS A record points to `SERVER_IP`, domain is saved in profile, then `journalctl -u caddy -n 30`

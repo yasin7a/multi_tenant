@@ -1,19 +1,10 @@
 {
 	email takitahmid20@gmail.com
 
+	# Issue HTTPS certs only when the app approves the hostname (custom domains + platform hosts).
 	on_demand_tls {
 		ask http://127.0.0.1:3000/internal/caddy-ask
 	}
-}
-
-multi.takitahmid.com, *.multi.takitahmid.com {
-	tls /etc/letsencrypt/live/multi.takitahmid.com/fullchain.pem /etc/letsencrypt/live/multi.takitahmid.com/privkey.pem
-
-	request_body {
-		max_size 6MB
-	}
-
-	reverse_proxy 127.0.0.1:3000
 }
 
 https:// {

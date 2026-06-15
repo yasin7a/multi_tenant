@@ -8,14 +8,6 @@ git pull && npm install && npx prisma migrate deploy
 pm2 restart multi-tenant
 ```
 
-**First time SSL** (add DNS TXT when certbot asks):
-
-```bash
-sudo apt install -y certbot
-sudo certbot certonly --manual --preferred-challenges dns \
-  -d multi.takitahmid.com -d '*.multi.takitahmid.com'
-```
-
 **Caddy** (app must be running on :3000 first):
 
 ```bash
@@ -23,11 +15,11 @@ pm2 restart multi-tenant
 sudo bash scripts/setup-caddy.sh
 ```
 
-If still down: `journalctl -u caddy -n 20`
+Caddy reverse-proxies HTTPS to the app. Custom domains get automatic Let's Encrypt certificates after the user points DNS to your server and saves the domain in their profile.
 
-Renew: `sudo certbot renew && sudo systemctl reload caddy`
+If Caddy fails: `journalctl -u caddy -n 20`
 
-`.env`: `ROOT_DOMAIN=multi.takitahmid.com`, `PUBLIC_URL=https://multi.takitahmid.com`
+`.env`: `ROOT_DOMAIN=multi.takitahmid.com`, `PUBLIC_URL=https://multi.takitahmid.com`, `SERVER_IP=<your server IP>`
 
 ## Local
 
