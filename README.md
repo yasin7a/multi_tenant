@@ -1,32 +1,33 @@
 # Multi-Tenant App
 
-Subdomain-based multi-tenant platform with user profiles, image upload, and optional custom domains.
-
-## Production deployment
-
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full guide:
-
-- DNS (Cloudflare)
-- Environment variables
-- PM2 app setup
-- **Nginx (legacy)** — manual SSL, wildcard certbot
-- **Caddy (recommended)** — auto SSL for subdomains + custom domains
-
-## Quick start (local)
+## Production
 
 ```bash
-npm install
-cp .env.example .env   # or create .env
-npx prisma migrate deploy
-npm run dev
+cd /var/www/multi_tenant
+git pull && npm install && npx prisma migrate deploy
+pm2 restart multi-tenant
 ```
 
-Visit `http://lvh.me:3000` (set `ROOT_DOMAIN=lvh.me` in `.env`).
+**First time SSL** (add DNS TXT when certbot asks):
 
-## Scripts
+```bash
+sudo apt install -y certbot
+sudo certbot certonly --manual --preferred-challenges dns \
+  -d multi.takitahmid.com -d '*.multi.takitahmid.com'
+```
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Local development |
-| `npm start` | Production app |
-| `npm run setup:caddy` | Install/configure Caddy on server |
+**Caddy:**
+
+```bash
+sudo bash scripts/setup-caddy.sh
+```
+
+Renew: `sudo certbot renew && sudo systemctl reload caddy`
+
+`.env`: `ROOT_DOMAIN=multi.takitahmid.com`, `PUBLIC_URL=https://multi.takitahmid.com`
+
+## Local
+
+```bash
+npm run dev
+```

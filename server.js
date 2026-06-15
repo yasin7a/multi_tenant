@@ -455,32 +455,6 @@ app.get('/internal/caddy-ask', async (request, reply) => {
   return reply.code(200).send('ok')
 })
 
-app.get('/internal/caddy-check', async (request, reply) => {
-  const domain = normalizeCustomDomain(request.query.domain)
-  const askUrl = domain
-    ? `http://127.0.0.1:${PORT}/internal/caddy-ask?domain=${encodeURIComponent(domain)}`
-    : null
-
-  let askStatus = null
-  if (domain) {
-    try {
-      const res = await fetch(askUrl)
-      askStatus = res.status
-    } catch {
-      askStatus = 'error'
-    }
-  }
-
-  return {
-    rootDomain: ROOT_DOMAIN,
-    domain,
-    askStatus,
-    hint: askStatus === 200
-      ? 'Caddy can issue SSL for this domain'
-      : 'Fix ROOT_DOMAIN, tenant subdomain, or pull latest server.js — then pm2 restart',
-  }
-})
-
 app.get('/', async (request, reply) => {
   const hostCtx = await resolveHost(request)
   const subdomain = getSubdomainFromContext(hostCtx)
