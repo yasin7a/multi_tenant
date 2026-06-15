@@ -1,0 +1,21 @@
+<div class="card">
+  <h1>Create account</h1>
+  <p class="meta">Your username becomes your subdomain.</p>
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <form method="post" action="/register">
+    <label>
+      Username
+      <input type="text" name="username" value="<%= values.username || '' %>" placeholder="jane" required>
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" value="<%= values.email || '' %>" placeholder="you@gmail.com" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" placeholder="••••••••" required>
+    </label>
+    <button type="submit" class="btn-block">Create account</button>
+  </form>
+  <p class="footer-note">Already have an account? <a href="/login">Sign in</a></p>
+</div>

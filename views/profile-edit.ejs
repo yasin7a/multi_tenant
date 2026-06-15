@@ -1,0 +1,42 @@
+<div class="card">
+  <div class="profile-header">
+    <div class="avatar"><%= user.username.charAt(0).toUpperCase() %></div>
+    <div>
+      <span class="badge">Your account</span>
+      <h1><%= user.username %></h1>
+    </div>
+  </div>
+
+  <% if (error) { %><div class="error"><%= error %></div><% } %>
+  <% if (success) { %><div class="success"><%= success %></div><% } %>
+
+  <form method="post" action="/profile">
+    <label>
+      Username
+      <input type="text" name="username" value="<%= user.username %>" required>
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" value="<%= user.email %>" required>
+    </label>
+    <label>
+      Tenant name
+      <input type="text" name="tenantName" value="<%= user.tenant.name %>" required>
+    </label>
+    <label>
+      Subdomain
+      <input type="text" value="<%= user.tenant.subdomain %>.<%= rootDomain %>" disabled>
+    </label>
+    <button type="submit" class="btn-block">Save changes</button>
+  </form>
+
+  <div class="site-link">
+    <label>Public site</label>
+    <a href="<%= siteUrl %>" target="_blank"><%= siteUrl %></a>
+  </div>
+
+  <div class="actions">
+    <a class="btn" href="<%= siteUrl %>" target="_blank">Visit your site →</a>
+    <a class="btn btn-secondary" href="/logout">Logout</a>
+  </div>
+</div>

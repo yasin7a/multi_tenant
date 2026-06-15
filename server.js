@@ -1,21 +1,51 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
+import formbody from '@fastify/formbody'
+import fastifyStatic from '@fastify/static'
+import view from '@fastify/view'
+import ejs from 'ejs'
 import bcrypt from 'bcryptjs'
 import { prisma } from './lib/prisma.js'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = Fastify({ logger: true })
 
 await app.register(cookie)
-
-function setAuthCookie(reply, userId) {
-  reply.setCookie('userId', userId, {
-    path: '/',
-    httpOnly: true,
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  })
-}
+await app.register(formbody)
+await app.register(fastifyStatic, { root: path.join(__dirname, 'public') })
+await app.register(view, {
+  engine: { ejs },
+  root: path.join(__dirname, 'views'),
+})
 
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
+const PORT = process.env.PORT || 3000
+
+function setAuthCookie(reply, userId) {
+  const options = {
+    path: '/',
+    httpOnly: true,
+    maxAge: 60 * 60 * 24 * 7,
+  }
+
+  if (ROOT_DOMAIN !== 'localhost') {
+    options.domain = `.${ROOT_DOMAIN}`
+  }
+
+  reply.setCookie('userId', userId, options)
+}
+
+function clearAuthCookie(reply) {
+  const options = { path: '/' }
+
+  if (ROOT_DOMAIN !== 'localhost') {
+    options.domain = `.${ROOT_DOMAIN}`
+  }
+
+  reply.clearCookie('userId', options)
+}
 
 function getSubdomain(request) {
   const host = request.hostname
@@ -40,6 +70,43 @@ function getSubdomain(request) {
   return null
 }
 
+function getSiteUrl(subdomain) {
+  return `http://${subdomain}.${ROOT_DOMAIN}:${PORT}`
+}
+
+function getMainUrl(path = '/') {
+  return `http://${ROOT_DOMAIN}:${PORT}${path}`
+}
+
+async function renderTenantNotFound(reply, subdomain) {
+  const body = await ejs.renderFile(path.join(__dirname, 'views', 'tenant-not-found.ejs'), {
+    subdomain,
+    rootDomain: ROOT_DOMAIN,
+    mainUrl: getMainUrl(),
+  })
+  const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
+    title: 'Site not found',
+    body,
+  })
+
+  return reply.code(404).type('text/html').send(html)
+}
+
+function wantsJson(request) {
+  const accept = request.headers.accept || ''
+  return accept.includes('application/json') && !accept.includes('text/html')
+}
+
+async function renderPage(reply, template, data) {
+  const body = await ejs.renderFile(path.join(__dirname, 'views', template), data)
+  const html = await ejs.renderFile(path.join(__dirname, 'views', 'layout.ejs'), {
+    title: data.title,
+    body,
+  })
+
+  return reply.type('text/html').send(html)
+}
+
 async function getPublicProfile(subdomain) {
   return prisma.user.findFirst({
     where: { tenant: { subdomain } },
@@ -55,20 +122,39 @@ async function publicSiteHandler(request, reply) {
   const subdomain = getSubdomain(request)
 
   if (!subdomain) {
-    return reply.code(400).send({ error: 'visit a tenant subdomain to view their site' })
+    if (wantsJson(request)) {
+      return reply.code(400).send({ error: 'visit a tenant subdomain to view their site' })
+    }
+
+    return renderPage(reply, 'error.ejs', {
+      title: 'Subdomain required',
+      message: 'Visit a tenant subdomain to view their site.',
+      subdomain: false,
+    })
   }
 
   const user = await getPublicProfile(subdomain)
 
   if (!user) {
-    return reply.code(404).send({ error: 'site not found' })
+    if (wantsJson(request)) {
+      return reply.code(404).send({ error: 'site not found' })
+    }
+
+    return renderTenantNotFound(reply, subdomain)
   }
 
-  return {
-    username: user.username,
-    tenantId: user.tenantId,
-    tenant: user.tenant,
+  if (wantsJson(request)) {
+    return {
+      username: user.username,
+      tenantId: user.tenantId,
+      tenant: user.tenant,
+    }
   }
+
+  return renderPage(reply, 'site.ejs', {
+    title: `${user.username}'s site`,
+    user,
+  })
 }
 
 app.get('/', async (request, reply) => {
@@ -78,16 +164,40 @@ app.get('/', async (request, reply) => {
     return publicSiteHandler(request, reply)
   }
 
-  return { message: 'server is ok' }
+  if (wantsJson(request)) {
+    return { message: 'server is ok' }
+  }
+
+  return renderPage(reply, 'home.ejs', { title: 'Multi Tenant App' })
 })
 
 app.get('/site', publicSiteHandler)
+
+app.get('/register', async (request, reply) => {
+  if (getSubdomain(request)) {
+    return reply.redirect('/')
+  }
+
+  return renderPage(reply, 'register.ejs', {
+    title: 'Register',
+    error: null,
+    values: {},
+  })
+})
 
 app.post('/register', async (request, reply) => {
   const { username, email, password } = request.body
 
   if (!username || !email || !password) {
-    return reply.code(400).send({ error: 'username, email, and password are required' })
+    if (wantsJson(request)) {
+      return reply.code(400).send({ error: 'username, email, and password are required' })
+    }
+
+    return renderPage(reply, 'register.ejs', {
+      title: 'Register',
+      error: 'Username, email, and password are required.',
+      values: { username, email },
+    })
   }
 
   const existing = await prisma.user.findFirst({
@@ -95,15 +205,30 @@ app.post('/register', async (request, reply) => {
   })
 
   if (existing) {
-    return reply.code(409).send({ error: 'username or email already exists' })
+    if (wantsJson(request)) {
+      return reply.code(409).send({ error: 'username or email already exists' })
+    }
+
+    return renderPage(reply, 'register.ejs', {
+      title: 'Register',
+      error: 'Username or email already exists.',
+      values: { username, email },
+    })
   }
 
   const subdomain = username.toLowerCase()
-
   const existingTenant = await prisma.tenant.findUnique({ where: { subdomain } })
 
   if (existingTenant) {
-    return reply.code(409).send({ error: 'subdomain already taken' })
+    if (wantsJson(request)) {
+      return reply.code(409).send({ error: 'subdomain already taken' })
+    }
+
+    return renderPage(reply, 'register.ejs', {
+      title: 'Register',
+      error: 'Subdomain already taken.',
+      values: { username, email },
+    })
   }
 
   const hashedPassword = await bcrypt.hash(password, 10)
@@ -125,40 +250,87 @@ app.post('/register', async (request, reply) => {
   })
 
   setAuthCookie(reply, user.id)
-  return reply.code(201).send({ isLoggedIn: true, userId: user.id })
+
+  if (wantsJson(request)) {
+    return reply.code(201).send({ isLoggedIn: true, userId: user.id })
+  }
+
+  return reply.redirect('/profile')
+})
+
+app.get('/login', async (request, reply) => {
+  if (getSubdomain(request)) {
+    return reply.redirect('/')
+  }
+
+  return renderPage(reply, 'login.ejs', {
+    title: 'Login',
+    error: null,
+    values: {},
+  })
 })
 
 app.post('/login', async (request, reply) => {
   const { email, password } = request.body
 
   if (!email || !password) {
-    return reply.code(400).send({ error: 'email and password are required' })
+    if (wantsJson(request)) {
+      return reply.code(400).send({ error: 'email and password are required' })
+    }
+
+    return renderPage(reply, 'login.ejs', {
+      title: 'Login',
+      error: 'Email and password are required.',
+      values: { email },
+    })
   }
 
   const user = await prisma.user.findUnique({ where: { email } })
 
   if (!user) {
-    return reply.code(401).send({ error: 'invalid credentials' })
+    if (wantsJson(request)) {
+      return reply.code(401).send({ error: 'invalid credentials' })
+    }
+
+    return renderPage(reply, 'login.ejs', {
+      title: 'Login',
+      error: 'Invalid credentials.',
+      values: { email },
+    })
   }
 
   const valid = await bcrypt.compare(password, user.password)
 
   if (!valid) {
-    return reply.code(401).send({ error: 'invalid credentials' })
+    if (wantsJson(request)) {
+      return reply.code(401).send({ error: 'invalid credentials' })
+    }
+
+    return renderPage(reply, 'login.ejs', {
+      title: 'Login',
+      error: 'Invalid credentials.',
+      values: { email },
+    })
   }
 
   setAuthCookie(reply, user.id)
-  return { isLoggedIn: true, userId: user.id }
-})
 
-app.get('/profile', async (request, reply) => {
-  const userId = request.cookies.userId
-
-  if (!userId) {
-    return reply.code(401).send({ error: 'not authenticated' })
+  if (wantsJson(request)) {
+    return { isLoggedIn: true, userId: user.id }
   }
 
-  const user = await prisma.user.findUnique({
+  return reply.redirect('/profile')
+})
+
+app.get('/logout', async (request, reply) => {
+  clearAuthCookie(reply)
+  return reply.redirect('/login')
+})
+
+async function getAuthUser(userId) {
+  if (!userId) return null
+
+  return prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -168,11 +340,17 @@ app.get('/profile', async (request, reply) => {
       tenant: { select: { id: true, name: true, subdomain: true } },
     },
   })
+}
 
-  if (!user) {
-    return reply.code(401).send({ error: 'not authenticated' })
+function publicProfileJson(user) {
+  return {
+    username: user.username,
+    tenantId: user.tenantId,
+    tenant: user.tenant,
   }
+}
 
+function authProfileJson(user) {
   return {
     isLoggedIn: true,
     userId: user.id,
@@ -181,11 +359,160 @@ app.get('/profile', async (request, reply) => {
     tenantId: user.tenantId,
     tenant: user.tenant,
   }
+}
+
+app.get('/profile', async (request, reply) => {
+  const subdomain = getSubdomain(request)
+  const authUser = await getAuthUser(request.cookies.userId)
+
+  if (subdomain) {
+    const publicUser = await getPublicProfile(subdomain)
+
+    if (!publicUser) {
+      if (wantsJson(request)) {
+        return reply.code(404).send({ error: 'profile not found' })
+      }
+
+      return renderTenantNotFound(reply, subdomain)
+    }
+
+    const isOwner = authUser?.tenant.subdomain === subdomain
+
+    if (isOwner) {
+      if (wantsJson(request)) {
+        return authProfileJson(authUser)
+      }
+
+      return renderPage(reply, 'profile-edit.ejs', {
+        title: 'Profile',
+        user: authUser,
+        siteUrl: getSiteUrl(authUser.tenant.subdomain),
+        rootDomain: ROOT_DOMAIN,
+        error: null,
+        success: null,
+      })
+    }
+
+    if (wantsJson(request)) {
+      return publicProfileJson(publicUser)
+    }
+
+    return renderPage(reply, 'profile-public.ejs', {
+      title: `${publicUser.username}'s profile`,
+      user: publicUser,
+      rootDomain: ROOT_DOMAIN,
+      subdomain: true,
+    })
+  }
+
+  if (!authUser) {
+    if (wantsJson(request)) {
+      return reply.code(401).send({ error: 'not authenticated' })
+    }
+
+    return reply.redirect('/login')
+  }
+
+  if (wantsJson(request)) {
+    return authProfileJson(authUser)
+  }
+
+  return renderPage(reply, 'profile-edit.ejs', {
+    title: 'Profile',
+    user: authUser,
+    siteUrl: getSiteUrl(authUser.tenant.subdomain),
+    rootDomain: ROOT_DOMAIN,
+    error: null,
+    success: null,
+  })
+})
+
+app.post('/profile', async (request, reply) => {
+  const authUser = await getAuthUser(request.cookies.userId)
+
+  if (!authUser) {
+    if (wantsJson(request)) {
+      return reply.code(401).send({ error: 'not authenticated' })
+    }
+
+    return reply.redirect('/login')
+  }
+
+  const { username, email, tenantName } = request.body
+
+  if (!username || !email || !tenantName) {
+    if (wantsJson(request)) {
+      return reply.code(400).send({ error: 'username, email, and tenant name are required' })
+    }
+
+    return renderPage(reply, 'profile-edit.ejs', {
+      title: 'Profile',
+      user: authUser,
+      siteUrl: getSiteUrl(authUser.tenant.subdomain),
+      rootDomain: ROOT_DOMAIN,
+      error: 'Username, email, and tenant name are required.',
+      success: null,
+    })
+  }
+
+  const existing = await prisma.user.findFirst({
+    where: {
+      OR: [{ username }, { email }],
+      NOT: { id: authUser.id },
+    },
+  })
+
+  if (existing) {
+    if (wantsJson(request)) {
+      return reply.code(409).send({ error: 'username or email already exists' })
+    }
+
+    return renderPage(reply, 'profile-edit.ejs', {
+      title: 'Profile',
+      user: authUser,
+      siteUrl: getSiteUrl(authUser.tenant.subdomain),
+      rootDomain: ROOT_DOMAIN,
+      error: 'Username or email already exists.',
+      success: null,
+    })
+  }
+
+  const updatedUser = await prisma.$transaction(async (tx) => {
+    await tx.tenant.update({
+      where: { id: authUser.tenantId },
+      data: { name: tenantName },
+    })
+
+    return tx.user.update({
+      where: { id: authUser.id },
+      data: { username, email },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        tenantId: true,
+        tenant: { select: { id: true, name: true, subdomain: true } },
+      },
+    })
+  })
+
+  if (wantsJson(request)) {
+    return authProfileJson(updatedUser)
+  }
+
+  return renderPage(reply, 'profile-edit.ejs', {
+    title: 'Profile',
+    user: updatedUser,
+    siteUrl: getSiteUrl(updatedUser.tenant.subdomain),
+    rootDomain: ROOT_DOMAIN,
+    error: null,
+    success: 'Profile updated successfully.',
+  })
 })
 
 const start = async () => {
   try {
-    await app.listen({ port: 3000, host: '0.0.0.0' })
+    await app.listen({ port: PORT, host: '0.0.0.0' })
   } catch (err) {
     app.log.error(err)
     process.exit(1)

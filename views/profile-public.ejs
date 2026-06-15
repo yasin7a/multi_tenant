@@ -1,0 +1,31 @@
+<div class="card">
+  <div class="profile-header">
+    <div class="avatar"><%= user.username.charAt(0).toUpperCase() %></div>
+    <div>
+      <span class="badge">Public profile</span>
+      <h1><%= user.username %></h1>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-item">
+      <label>Username</label>
+      <p><%= user.username %></p>
+    </div>
+    <div class="info-item">
+      <label>Tenant</label>
+      <p><%= user.tenant.name %></p>
+    </div>
+    <div class="info-item">
+      <label>Subdomain</label>
+      <p><%= user.tenant.subdomain %>.<%= rootDomain %></p>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a class="btn btn-secondary" href="/">View site</a>
+    <% if (!subdomain) { %>
+      <a class="btn" href="/login">Sign in</a>
+    <% } %>
+  </div>
+</div>
