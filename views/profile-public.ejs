@@ -8,7 +8,7 @@
     <div>
       <span class="badge">Public profile</span>
       <h1><%= user.username %></h1>
-      <p class="meta"><a href="<%= profileUrl %>"><%= user.tenant.subdomain %>.<%= rootDomain %></a></p>
+      <p class="meta"><a href="<%= profileUrl %>"><%= user.tenant.customDomain || (user.tenant.subdomain + '.' + rootDomain) %></a></p>
     </div>
   </div>
 
@@ -25,12 +25,18 @@
       </div>
       <div class="info-item">
         <label>Profile URL</label>
-        <p><a href="<%= profileUrl %>"><%= user.tenant.subdomain %>.<%= rootDomain %></a></p>
+        <p><a href="<%= profileUrl %>"><%= user.tenant.customDomain || (user.tenant.subdomain + '.' + rootDomain) %></a></p>
       </div>
       <div class="info-item">
         <label>Subdomain</label>
-        <p><%= user.tenant.subdomain %></p>
+        <p><%= user.tenant.subdomain %>.<%= rootDomain %></p>
       </div>
+      <% if (user.tenant.customDomain) { %>
+      <div class="info-item">
+        <label>Custom domain</label>
+        <p><a href="https://<%= user.tenant.customDomain %>"><%= user.tenant.customDomain %></a></p>
+      </div>
+      <% } %>
       <div class="info-item">
         <label>Member since</label>
         <p><time datetime="<%= new Date(user.createdAt).toISOString() %>"><%= memberSince %></time></p>

@@ -8,10 +8,11 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  subdomain String   @unique
-  createdAt DateTime @default(now())
-  users     User[]
+  id           String   @id @default(cuid())
+  subdomain    String   @unique
+  customDomain String?  @unique
+  createdAt    DateTime @default(now())
+  users        User[]
 }
 
 model User {

@@ -9,7 +9,8 @@
     "p:gen": "npx prisma generate",
     "p:valid": "npx prisma format && npx prisma validate",
     "p:all": "npm run p:valid && npm run p:gen && npm run p:migrate",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "setup:caddy": "bash scripts/setup-caddy.sh"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

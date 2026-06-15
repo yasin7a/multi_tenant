@@ -24,6 +24,7 @@ const ALLOWED_IMAGE_TYPES = {
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
 const PORT = process.env.PORT || 3000
 const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, '')
+const SERVER_IP = process.env.SERVER_IP || ''
 
 const app = Fastify({ logger: true, trustProxy: true })
 
@@ -56,36 +57,89 @@ function clearAuthCookie(reply) {
   reply.clearCookie('userId', options)
 }
 
-function getSubdomain(request) {
+function normalizeCustomDomain(value) {
+  if (!value) return null
+
+  let domain = String(value).trim().toLowerCase()
+  domain = domain.replace(/^https?:\/\//, '')
+  domain = domain.split('/')[0].split(':')[0].replace(/\.$/, '')
+
+  return domain || null
+}
+
+function isValidCustomDomain(domain) {
+  if (!domain || domain.length > 253) return false
+  if (domain === ROOT_DOMAIN || domain.endsWith(`.${ROOT_DOMAIN}`)) return false
+  if (domain === 'localhost' || domain.endsWith('.localhost')) return false
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(domain)) return false
+
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(domain)
+}
+
+async function resolveHost(request) {
   const host = request.hostname
 
   if (host === 'localhost' || host === ROOT_DOMAIN) {
-    return null
+    return { type: 'main' }
   }
 
   if (host.endsWith('.localhost')) {
-    return host.slice(0, -'.localhost'.length)
+    return {
+      type: 'tenant',
+      subdomain: host.slice(0, -'.localhost'.length),
+      isCustomDomain: false,
+    }
   }
 
   if (host.endsWith(`.${ROOT_DOMAIN}`)) {
-    return host.slice(0, -(ROOT_DOMAIN.length + 1))
+    return {
+      type: 'tenant',
+      subdomain: host.slice(0, -(ROOT_DOMAIN.length + 1)),
+      isCustomDomain: false,
+    }
   }
 
-  const parts = host.split('.')
-  if (parts.length >= 3) {
-    return parts[0]
+  const tenant = await prisma.tenant.findFirst({
+    where: { customDomain: host },
+    select: { subdomain: true },
+  })
+
+  if (tenant) {
+    return {
+      type: 'tenant',
+      subdomain: tenant.subdomain,
+      isCustomDomain: true,
+    }
   }
 
-  return null
+  return { type: 'unknown', host }
+}
+
+function getSubdomainFromContext(ctx) {
+  return ctx.type === 'tenant' ? ctx.subdomain : null
+}
+
+function getPublicProtocol() {
+  if (PUBLIC_URL?.startsWith('https')) return 'https'
+  if (PUBLIC_URL?.startsWith('http')) return 'http'
+
+  return 'http'
 }
 
 function getSiteUrl(subdomain) {
   if (PUBLIC_URL) {
-    const protocol = PUBLIC_URL.startsWith('https') ? 'https' : 'http'
-    return `${protocol}://${subdomain}.${ROOT_DOMAIN}`
+    return `${getPublicProtocol()}://${subdomain}.${ROOT_DOMAIN}`
   }
 
   return `http://${subdomain}.${ROOT_DOMAIN}:${PORT}`
+}
+
+function getTenantPublicUrl(tenant) {
+  if (tenant.customDomain) {
+    return `${getPublicProtocol()}://${tenant.customDomain}`
+  }
+
+  return getSiteUrl(tenant.subdomain)
 }
 
 function formatProfileDate(date) {
@@ -97,8 +151,10 @@ function formatProfileDate(date) {
 }
 
 function buildPublicProfileMeta(user, subdomain) {
-  const profileUrl = getSiteUrl(subdomain)
-  const description = `Public profile of ${user.username} at ${subdomain}.${ROOT_DOMAIN}`
+  const profileUrl = getTenantPublicUrl(user.tenant)
+  const description = user.tenant.customDomain
+    ? `Public profile of ${user.username} at ${user.tenant.customDomain}`
+    : `Public profile of ${user.username} at ${subdomain}.${ROOT_DOMAIN}`
   const imageUrl = user.imageUrl ? `${profileUrl}${user.imageUrl}` : null
 
   return {
@@ -227,7 +283,7 @@ async function getAuthUser(userId) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, subdomain: true, createdAt: true } },
+      tenant: { select: { id: true, subdomain: true, customDomain: true, createdAt: true } },
     },
   })
 }
@@ -269,6 +325,7 @@ async function renderProfileEdit(reply, request, user, { error = null, success =
     title: 'Edit profile',
     user,
     rootDomain: ROOT_DOMAIN,
+    serverIp: SERVER_IP,
     error,
     success,
   }, request)
@@ -283,7 +340,7 @@ async function getPublicProfile(subdomain) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, subdomain: true, createdAt: true } },
+      tenant: { select: { id: true, subdomain: true, customDomain: true, createdAt: true } },
     },
   })
 }
@@ -310,7 +367,7 @@ async function renderPublicProfile(request, reply, subdomain) {
     }
   }
 
-  const profileUrl = getSiteUrl(subdomain)
+  const profileUrl = getTenantPublicUrl(user.tenant)
 
   return renderPage(reply, 'profile-public.ejs', {
     title: `${user.username}'s profile`,
@@ -324,8 +381,12 @@ async function renderPublicProfile(request, reply, subdomain) {
   }, request)
 }
 
-async function renderSubdomainEdit(request, reply, subdomain) {
+async function renderSubdomainEdit(request, reply, subdomain, { isCustomDomain = false } = {}) {
   const authUser = await getAuthUser(request.cookies.userId)
+
+  if (isCustomDomain) {
+    return reply.redirect(`${getSiteUrl(subdomain)}/edit`)
+  }
 
   if (!authUser || authUser.tenant.subdomain !== subdomain) {
     if (wantsJson(request)) {
@@ -351,8 +412,36 @@ async function renderSubdomainEdit(request, reply, subdomain) {
   return renderProfileEdit(reply, request, authUser)
 }
 
+app.get('/internal/caddy-ask', async (request, reply) => {
+  const domain = normalizeCustomDomain(request.query.domain)
+
+  if (!domain || !isValidCustomDomain(domain)) {
+    return reply.code(403).send()
+  }
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { customDomain: domain },
+    select: { id: true },
+  })
+
+  if (!tenant) {
+    return reply.code(403).send()
+  }
+
+  return reply.code(200).send('ok')
+})
+
 app.get('/', async (request, reply) => {
-  const subdomain = getSubdomain(request)
+  const hostCtx = await resolveHost(request)
+  const subdomain = getSubdomainFromContext(hostCtx)
+
+  if (hostCtx.type === 'unknown') {
+    if (wantsJson(request)) {
+      return reply.code(404).send({ error: 'site not found' })
+    }
+
+    return renderTenantNotFound(reply, request, hostCtx.host)
+  }
 
   if (subdomain) {
     return renderPublicProfile(request, reply, subdomain)
@@ -366,7 +455,9 @@ app.get('/', async (request, reply) => {
 })
 
 app.get('/register', async (request, reply) => {
-  if (getSubdomain(request)) {
+  const hostCtx = await resolveHost(request)
+
+  if (hostCtx.type !== 'main') {
     return reply.redirect(getMainUrl('/register'))
   }
 
@@ -378,7 +469,9 @@ app.get('/register', async (request, reply) => {
 })
 
 app.post('/register', async (request, reply) => {
-  if (getSubdomain(request)) {
+  const hostCtx = await resolveHost(request)
+
+  if (hostCtx.type !== 'main') {
     return reply.redirect(getMainUrl('/register'))
   }
 
@@ -458,7 +551,12 @@ app.post('/register', async (request, reply) => {
 })
 
 app.get('/edit', async (request, reply) => {
-  const subdomain = getSubdomain(request)
+  const hostCtx = await resolveHost(request)
+  const subdomain = getSubdomainFromContext(hostCtx)
+
+  if (hostCtx.type === 'unknown') {
+    return renderTenantNotFound(reply, request, hostCtx.host)
+  }
 
   if (!subdomain) {
     const authUser = await getAuthUser(request.cookies.userId)
@@ -468,11 +566,15 @@ app.get('/edit', async (request, reply) => {
     return reply.redirect(getMainUrl('/login'))
   }
 
-  return renderSubdomainEdit(request, reply, subdomain)
+  return renderSubdomainEdit(request, reply, subdomain, {
+    isCustomDomain: hostCtx.isCustomDomain,
+  })
 })
 
 app.get('/login', async (request, reply) => {
-  if (getSubdomain(request)) {
+  const hostCtx = await resolveHost(request)
+
+  if (hostCtx.type !== 'main') {
     return reply.redirect(getMainUrl('/login'))
   }
 
@@ -484,7 +586,9 @@ app.get('/login', async (request, reply) => {
 })
 
 app.post('/login', async (request, reply) => {
-  if (getSubdomain(request)) {
+  const hostCtx = await resolveHost(request)
+
+  if (hostCtx.type !== 'main') {
     return reply.redirect(getMainUrl('/login'))
   }
 
@@ -548,7 +652,8 @@ app.get('/logout', async (request, reply) => {
 })
 
 app.post('/edit', async (request, reply) => {
-  const currentSubdomain = getSubdomain(request)
+  const hostCtx = await resolveHost(request)
+  const currentSubdomain = getSubdomainFromContext(hostCtx)
   const authUser = await getAuthUser(request.cookies.userId)
 
   if (!authUser) {
@@ -559,12 +664,13 @@ app.post('/edit', async (request, reply) => {
     return reply.redirect(getMainUrl('/login'))
   }
 
-  if (!currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
+  if (hostCtx.isCustomDomain || !currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
-  const { username, email, newImageUrl, imageError } = await parseEditRequest(request)
+  const { username, email, customDomain: customDomainRaw, newImageUrl, imageError } = await parseEditRequest(request)
   const newSubdomain = username?.toLowerCase().trim()
+  const customDomain = normalizeCustomDomain(customDomainRaw)
   const previousImageUrl = authUser.imageUrl
 
   const rejectEdit = async (options) => {
@@ -635,6 +741,32 @@ app.post('/edit', async (request, reply) => {
     }
   }
 
+  if (customDomain && !isValidCustomDomain(customDomain)) {
+    return rejectEdit({
+      status: 400,
+      error: 'invalid custom domain',
+      message: 'Enter a valid custom domain (e.g. mysite.com). Platform subdomains cannot be used.',
+    })
+  }
+
+  if (customDomain) {
+    const existingDomain = await prisma.tenant.findFirst({
+      where: {
+        customDomain,
+        NOT: { id: authUser.tenantId },
+      },
+      select: { id: true },
+    })
+
+    if (existingDomain) {
+      return rejectEdit({
+        status: 409,
+        error: 'custom domain already taken',
+        message: 'That custom domain is already in use.',
+      })
+    }
+  }
+
   const imageUrl = newImageUrl ?? authUser.imageUrl
 
   let updatedUser
@@ -643,7 +775,7 @@ app.post('/edit', async (request, reply) => {
     updatedUser = await prisma.$transaction(async (tx) => {
       await tx.tenant.update({
         where: { id: authUser.tenantId },
-        data: { subdomain: newSubdomain },
+        data: { subdomain: newSubdomain, customDomain },
       })
 
       return tx.user.update({
@@ -656,7 +788,7 @@ app.post('/edit', async (request, reply) => {
           imageUrl: true,
           createdAt: true,
           tenantId: true,
-          tenant: { select: { id: true, subdomain: true, createdAt: true } },
+          tenant: { select: { id: true, subdomain: true, customDomain: true, createdAt: true } },
         },
       })
     })

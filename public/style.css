@@ -441,6 +441,31 @@ input:disabled {
   color: var(--success);
 }
 
+.dns-help {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.dns-help > label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dns-help > p {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.dns-help .info-item {
+  margin-bottom: 0.5rem;
+}
+
 /* Public site */
 .site-hero {
   text-align: center;

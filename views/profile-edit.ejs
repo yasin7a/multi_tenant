@@ -28,9 +28,34 @@
       Email
       <input type="email" name="email" value="<%= user.email %>" required>
     </label>
+    <label>
+      Custom domain
+      <input type="text" name="customDomain" value="<%= user.tenant.customDomain || '' %>" placeholder="mysite.com">
+      <span class="meta">Optional. Point your domain to this server, then enter it here.</span>
+    </label>
     <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
     <button type="submit" class="btn-block">Save changes</button>
   </form>
+
+  <% if (serverIp) { %>
+    <div class="dns-help">
+      <label>DNS setup for custom domain</label>
+      <p>Add an <strong>A record</strong> at your domain provider:</p>
+      <div class="info-item">
+        <label>Type</label>
+        <p>A</p>
+      </div>
+      <div class="info-item">
+        <label>Name / Host</label>
+        <p>@ (or your domain root)</p>
+      </div>
+      <div class="info-item">
+        <label>Value</label>
+        <p><%= serverIp %></p>
+      </div>
+      <p class="meta">After DNS propagates (5–30 min), your site opens on your domain with <strong>automatic HTTPS</strong> — no manual SSL setup needed.</p>
+    </div>
+  <% } %>
 
   <script>
     document.querySelector('input[name="username"]').addEventListener('input', (e) => {
@@ -40,6 +65,10 @@
 
   <div class="site-link">
     <label>Public page</label>
+    <% if (user.tenant.customDomain) { %>
+      <a href="https://<%= user.tenant.customDomain %>"><%= user.tenant.customDomain %></a>
+      <span class="meta"> · </span>
+    <% } %>
     <a href="/" id="public-page-link"><%= user.tenant.subdomain %>.<%= rootDomain %></a>
   </div>
 </div>
