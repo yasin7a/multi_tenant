@@ -430,12 +430,9 @@ app.get('/internal/caddy-ask', async (request, reply) => {
       return reply.code(403).send()
     }
 
-    const tenant = await prisma.tenant.findUnique({
-      where: { subdomain },
-      select: { id: true },
-    })
-
-    if (tenant) {
+    // Approve any platform subdomain so Caddy can issue SSL.
+    // Unknown tenants get a 404 page from the app, not ERR_SSL_PROTOCOL_ERROR.
+    if (/^[a-z0-9-]+$/.test(subdomain)) {
       return reply.code(200).send('ok')
     }
 
