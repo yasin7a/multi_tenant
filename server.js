@@ -400,7 +400,7 @@ app.get('/logout', async (request, reply) => {
 })
 
 app.post('/edit', async (request, reply) => {
-  const subdomain = getSubdomain(request)
+  const currentSubdomain = getSubdomain(request)
   const authUser = await getAuthUser(request.cookies.userId)
 
   if (!authUser) {
@@ -411,11 +411,12 @@ app.post('/edit', async (request, reply) => {
     return reply.redirect(getMainUrl('/login'))
   }
 
-  if (!subdomain || authUser.tenant.subdomain !== subdomain) {
+  if (!currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
   const { username, email, tenantName } = request.body
+  const newSubdomain = username.toLowerCase().trim()
 
   if (!username || !email || !tenantName) {
     if (wantsJson(request)) {
@@ -424,6 +425,16 @@ app.post('/edit', async (request, reply) => {
 
     return renderProfileEdit(reply, request, authUser, {
       error: 'Username, email, and tenant name are required.',
+    })
+  }
+
+  if (!/^[a-zA-Z0-9-]+$/.test(username)) {
+    if (wantsJson(request)) {
+      return reply.code(400).send({ error: 'username can only contain letters, numbers, and hyphens' })
+    }
+
+    return renderProfileEdit(reply, request, authUser, {
+      error: 'Username can only contain letters, numbers, and hyphens.',
     })
   }
 
@@ -444,10 +455,24 @@ app.post('/edit', async (request, reply) => {
     })
   }
 
+  if (newSubdomain !== authUser.tenant.subdomain) {
+    const existingTenant = await prisma.tenant.findUnique({ where: { subdomain: newSubdomain } })
+
+    if (existingTenant) {
+      if (wantsJson(request)) {
+        return reply.code(409).send({ error: 'subdomain already taken' })
+      }
+
+      return renderProfileEdit(reply, request, authUser, {
+        error: 'That username is already taken as a subdomain.',
+      })
+    }
+  }
+
   const updatedUser = await prisma.$transaction(async (tx) => {
     await tx.tenant.update({
       where: { id: authUser.tenantId },
-      data: { name: tenantName },
+      data: { name: tenantName, subdomain: newSubdomain },
     })
 
     return tx.user.update({
@@ -472,6 +497,10 @@ app.post('/edit', async (request, reply) => {
       tenantId: updatedUser.tenantId,
       tenant: updatedUser.tenant,
     }
+  }
+
+  if (updatedUser.tenant.subdomain !== currentSubdomain) {
+    return reply.redirect(`${getSiteUrl(updatedUser.tenant.subdomain)}/edit`)
   }
 
   return renderProfileEdit(reply, request, updatedUser, {

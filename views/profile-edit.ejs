@@ -23,15 +23,18 @@
       Tenant name
       <input type="text" name="tenantName" value="<%= user.tenant.name %>" required>
     </label>
-    <label>
-      Subdomain
-      <input type="text" value="<%= user.tenant.subdomain %>.<%= rootDomain %>" disabled>
-    </label>
+    <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
     <button type="submit" class="btn-block">Save changes</button>
   </form>
 
+  <script>
+    document.querySelector('input[name="username"]').addEventListener('input', (e) => {
+      document.getElementById('subdomain-preview').textContent = e.target.value.toLowerCase()
+    })
+  </script>
+
   <div class="site-link">
     <label>Public page</label>
-    <a href="/"><%= user.tenant.subdomain %>.<%= rootDomain %></a>
+    <a href="/" id="public-page-link"><%= user.tenant.subdomain %>.<%= rootDomain %></a>
   </div>
 </div>
