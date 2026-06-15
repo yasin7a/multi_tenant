@@ -78,6 +78,27 @@ function getMainUrl(path = '/') {
   return `http://${ROOT_DOMAIN}:${PORT}${path}`
 }
 
+function getNavUrls(authUser) {
+  return {
+    mainUrl: getMainUrl(),
+    loginUrl: getMainUrl('/login'),
+    registerUrl: getMainUrl('/register'),
+    profileUrl: authUser ? getSiteUrl(authUser.tenant.subdomain) : getMainUrl('/profile'),
+    logoutUrl: getMainUrl('/logout'),
+  }
+}
+
+async function renderProfileEdit(reply, request, user, { error = null, success = null } = {}) {
+  return renderPage(reply, 'profile-edit.ejs', {
+    title: 'Edit profile',
+    user,
+    siteUrl: getSiteUrl(user.tenant.subdomain),
+    rootDomain: ROOT_DOMAIN,
+    error,
+    success,
+  }, request)
+}
+
 async function renderTenantNotFound(reply, request, subdomain) {
   const authUser = await getAuthUser(request.cookies.userId)
   const body = await ejs.renderFile(path.join(__dirname, 'views', 'tenant-not-found.ejs'), {
@@ -89,11 +110,7 @@ async function renderTenantNotFound(reply, request, subdomain) {
     title: 'Site not found',
     body,
     authUser,
-    mainUrl: getMainUrl(),
-    loginUrl: getMainUrl('/login'),
-    registerUrl: getMainUrl('/register'),
-    profileUrl: getMainUrl('/profile'),
-    logoutUrl: getMainUrl('/logout'),
+    ...getNavUrls(authUser),
   })
 
   return reply.code(404).type('text/html').send(html)
@@ -126,11 +143,7 @@ async function renderPage(reply, template, data, request) {
     title: data.title,
     body,
     authUser,
-    mainUrl: getMainUrl(),
-    loginUrl: getMainUrl('/login'),
-    registerUrl: getMainUrl('/register'),
-    profileUrl: getMainUrl('/profile'),
-    logoutUrl: getMainUrl('/logout'),
+    ...getNavUrls(authUser),
   })
 
   return reply.type('text/html').send(html)
@@ -190,6 +203,16 @@ app.get('/', async (request, reply) => {
   const subdomain = getSubdomain(request)
 
   if (subdomain) {
+    const authUser = await getAuthUser(request.cookies.userId)
+
+    if (authUser?.tenant.subdomain === subdomain) {
+      if (wantsJson(request)) {
+        return authProfileJson(authUser)
+      }
+
+      return renderProfileEdit(reply, request, authUser)
+    }
+
     return publicSiteHandler(request, reply)
   }
 
@@ -197,7 +220,7 @@ app.get('/', async (request, reply) => {
     return { message: 'server is ok' }
   }
 
-  return renderPage(reply, 'home.ejs', { title: 'Look at you Idiot' }, request)
+  return renderPage(reply, 'home.ejs', { title: 'Multi Tenant App' }, request)
 })
 
 app.get('/site', publicSiteHandler)
@@ -288,7 +311,7 @@ app.post('/register', async (request, reply) => {
     return reply.code(201).send({ isLoggedIn: true, userId: user.id })
   }
 
-  return reply.redirect('/profile')
+  return reply.redirect(getSiteUrl(subdomain))
 })
 
 app.get('/login', async (request, reply) => {
@@ -322,7 +345,10 @@ app.post('/login', async (request, reply) => {
     }, request)
   }
 
-  const user = await prisma.user.findUnique({ where: { email } })
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { tenant: { select: { subdomain: true } } },
+  })
 
   if (!user) {
     if (wantsJson(request)) {
@@ -356,7 +382,7 @@ app.post('/login', async (request, reply) => {
     return { isLoggedIn: true, userId: user.id }
   }
 
-  return reply.redirect('/profile')
+  return reply.redirect(getSiteUrl(user.tenant.subdomain))
 })
 
 app.get('/logout', async (request, reply) => {
@@ -387,69 +413,42 @@ app.get('/profile', async (request, reply) => {
   const subdomain = getSubdomain(request)
   const authUser = await getAuthUser(request.cookies.userId)
 
-  if (subdomain) {
-    const publicUser = await getPublicProfile(subdomain)
-
-    if (!publicUser) {
+  if (!subdomain) {
+    if (!authUser) {
       if (wantsJson(request)) {
-        return reply.code(404).send({ error: 'profile not found' })
+        return reply.code(401).send({ error: 'not authenticated' })
       }
 
-      return renderTenantNotFound(reply, request, subdomain)
+      return reply.redirect(getMainUrl('/login'))
     }
 
-    const isOwner = authUser?.tenant.subdomain === subdomain
-
-    if (isOwner) {
-      if (wantsJson(request)) {
-        return authProfileJson(authUser)
-      }
-
-      return renderPage(reply, 'profile-edit.ejs', {
-        title: 'Profile',
-        user: authUser,
-        siteUrl: getSiteUrl(authUser.tenant.subdomain),
-        rootDomain: ROOT_DOMAIN,
-        error: null,
-        success: null,
-      }, request)
-    }
-
-    if (wantsJson(request)) {
-      return publicProfileJson(publicUser)
-    }
-
-    return renderPage(reply, 'profile-public.ejs', {
-      title: `${publicUser.username}'s profile`,
-      user: publicUser,
-      rootDomain: ROOT_DOMAIN,
-      loginUrl: getMainUrl('/login'),
-    }, request)
+    return reply.redirect(getSiteUrl(authUser.tenant.subdomain))
   }
 
-  if (!authUser) {
+  const publicUser = await getPublicProfile(subdomain)
+
+  if (!publicUser) {
     if (wantsJson(request)) {
-      return reply.code(401).send({ error: 'not authenticated' })
+      return reply.code(404).send({ error: 'profile not found' })
     }
 
-    return reply.redirect('/login')
+    return renderTenantNotFound(reply, request, subdomain)
   }
 
   if (wantsJson(request)) {
-    return authProfileJson(authUser)
+    return publicProfileJson(publicUser)
   }
 
-  return renderPage(reply, 'profile-edit.ejs', {
-    title: 'Profile',
-    user: authUser,
-    siteUrl: getSiteUrl(authUser.tenant.subdomain),
+  return renderPage(reply, 'profile-public.ejs', {
+    title: `${publicUser.username}'s profile`,
+    user: publicUser,
     rootDomain: ROOT_DOMAIN,
-    error: null,
-    success: null,
+    loginUrl: getMainUrl('/login'),
   }, request)
 })
 
-app.post('/profile', async (request, reply) => {
+app.post('/edit', async (request, reply) => {
+  const subdomain = getSubdomain(request)
   const authUser = await getAuthUser(request.cookies.userId)
 
   if (!authUser) {
@@ -457,7 +456,11 @@ app.post('/profile', async (request, reply) => {
       return reply.code(401).send({ error: 'not authenticated' })
     }
 
-    return reply.redirect('/login')
+    return reply.redirect(getMainUrl('/login'))
+  }
+
+  if (!subdomain || authUser.tenant.subdomain !== subdomain) {
+    return reply.redirect(getSiteUrl(authUser.tenant.subdomain))
   }
 
   const { username, email, tenantName } = request.body
@@ -467,14 +470,9 @@ app.post('/profile', async (request, reply) => {
       return reply.code(400).send({ error: 'username, email, and tenant name are required' })
     }
 
-    return renderPage(reply, 'profile-edit.ejs', {
-      title: 'Profile',
-      user: authUser,
-      siteUrl: getSiteUrl(authUser.tenant.subdomain),
-      rootDomain: ROOT_DOMAIN,
+    return renderProfileEdit(reply, request, authUser, {
       error: 'Username, email, and tenant name are required.',
-      success: null,
-    }, request)
+    })
   }
 
   const existing = await prisma.user.findFirst({
@@ -489,14 +487,9 @@ app.post('/profile', async (request, reply) => {
       return reply.code(409).send({ error: 'username or email already exists' })
     }
 
-    return renderPage(reply, 'profile-edit.ejs', {
-      title: 'Profile',
-      user: authUser,
-      siteUrl: getSiteUrl(authUser.tenant.subdomain),
-      rootDomain: ROOT_DOMAIN,
+    return renderProfileEdit(reply, request, authUser, {
       error: 'Username or email already exists.',
-      success: null,
-    }, request)
+    })
   }
 
   const updatedUser = await prisma.$transaction(async (tx) => {
@@ -522,14 +515,19 @@ app.post('/profile', async (request, reply) => {
     return authProfileJson(updatedUser)
   }
 
-  return renderPage(reply, 'profile-edit.ejs', {
-    title: 'Profile',
-    user: updatedUser,
-    siteUrl: getSiteUrl(updatedUser.tenant.subdomain),
-    rootDomain: ROOT_DOMAIN,
-    error: null,
+  return renderProfileEdit(reply, request, updatedUser, {
     success: 'Profile updated successfully.',
-  }, request)
+  })
+})
+
+app.post('/profile', async (request, reply) => {
+  const authUser = await getAuthUser(request.cookies.userId)
+
+  if (!authUser) {
+    return reply.redirect(getMainUrl('/login'))
+  }
+
+  return reply.redirect(getSiteUrl(authUser.tenant.subdomain))
 })
 
 const start = async () => {

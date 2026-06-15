@@ -10,7 +10,7 @@
   <% if (error) { %><div class="error"><%= error %></div><% } %>
   <% if (success) { %><div class="success"><%= success %></div><% } %>
 
-  <form method="post" action="/profile">
+  <form method="post" action="/edit">
     <label>
       Username
       <input type="text" name="username" value="<%= user.username %>" required>
@@ -31,11 +31,11 @@
   </form>
 
   <div class="site-link">
-    <label>Public site</label>
-    <a href="<%= siteUrl %>" target="_blank"><%= siteUrl %></a>
+    <label>Public profile</label>
+    <a href="/profile"><%= user.tenant.subdomain %>.<%= rootDomain %>/profile</a>
   </div>
 
   <div class="actions">
-    <a class="btn" href="<%= siteUrl %>" target="_blank">Visit your site →</a>
+    <a class="btn btn-secondary" href="/site">View public site</a>
   </div>
 </div>

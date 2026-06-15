@@ -19,7 +19,7 @@
     <nav class="topbar-nav">
       <% if (authUser) { %>
         <span class="nav-user"><%= authUser.username %></span>
-        <a href="<%= profileUrl %>">Profile</a>
+        <a href="<%= profileUrl %>">Edit profile</a>
         <a href="<%= logoutUrl %>" class="btn-nav btn-nav-logout">Logout</a>
       <% } else { %>
         <a href="<%= loginUrl %>">Login</a>
