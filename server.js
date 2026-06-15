@@ -170,7 +170,7 @@ async function getAuthUser(userId) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, name: true, subdomain: true } },
+      tenant: { select: { id: true, subdomain: true } },
     },
   })
 }
@@ -224,7 +224,7 @@ async function getPublicProfile(subdomain) {
       imageUrl: true,
       createdAt: true,
       tenantId: true,
-      tenant: { select: { id: true, name: true, subdomain: true } },
+      tenant: { select: { id: true, subdomain: true } },
     },
   })
 }
@@ -348,7 +348,10 @@ app.post('/register', async (request, reply) => {
   }
 
   const subdomain = username.toLowerCase()
-  const existingTenant = await prisma.tenant.findUnique({ where: { subdomain } })
+  const existingTenant = await prisma.tenant.findUnique({
+    where: { subdomain },
+    select: { id: true },
+  })
 
   if (existingTenant) {
     if (wantsJson(request)) {
@@ -366,7 +369,7 @@ app.post('/register', async (request, reply) => {
 
   const user = await prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
-      data: { name: `${username}'s tenant`, subdomain },
+      data: { subdomain },
     })
 
     return tx.user.create({
@@ -495,16 +498,16 @@ app.post('/edit', async (request, reply) => {
     return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
   }
 
-  const { username, email, tenantName, imageFile } = await parseEditRequest(request)
+  const { username, email, imageFile } = await parseEditRequest(request)
   const newSubdomain = username.toLowerCase().trim()
 
-  if (!username || !email || !tenantName) {
+  if (!username || !email) {
     if (wantsJson(request)) {
-      return reply.code(400).send({ error: 'username, email, and tenant name are required' })
+      return reply.code(400).send({ error: 'username and email are required' })
     }
 
     return renderProfileEdit(reply, request, authUser, {
-      error: 'Username, email, and tenant name are required.',
+      error: 'Username and email are required.',
     })
   }
 
@@ -536,7 +539,10 @@ app.post('/edit', async (request, reply) => {
   }
 
   if (newSubdomain !== authUser.tenant.subdomain) {
-    const existingTenant = await prisma.tenant.findUnique({ where: { subdomain: newSubdomain } })
+    const existingTenant = await prisma.tenant.findUnique({
+      where: { subdomain: newSubdomain },
+      select: { id: true },
+    })
 
     if (existingTenant) {
       if (wantsJson(request)) {
@@ -573,7 +579,7 @@ app.post('/edit', async (request, reply) => {
   const updatedUser = await prisma.$transaction(async (tx) => {
     await tx.tenant.update({
       where: { id: authUser.tenantId },
-      data: { name: tenantName, subdomain: newSubdomain },
+      data: { subdomain: newSubdomain },
     })
 
     return tx.user.update({
@@ -586,7 +592,7 @@ app.post('/edit', async (request, reply) => {
         imageUrl: true,
         createdAt: true,
         tenantId: true,
-        tenant: { select: { id: true, name: true, subdomain: true } },
+        tenant: { select: { id: true, subdomain: true } },
       },
     })
   })

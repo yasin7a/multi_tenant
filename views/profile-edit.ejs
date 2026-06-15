@@ -28,10 +28,6 @@
       Email
       <input type="email" name="email" value="<%= user.email %>" required>
     </label>
-    <label>
-      Tenant name
-      <input type="text" name="tenantName" value="<%= user.tenant.name %>" required>
-    </label>
     <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
     <button type="submit" class="btn-block">Save changes</button>
   </form>

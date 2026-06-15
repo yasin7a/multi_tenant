@@ -8,7 +8,7 @@
     <div>
       <span class="badge">Public profile</span>
       <h1><%= user.username %></h1>
-      <p class="meta"><%= user.tenant.name %></p>
+      <p class="meta"><%= user.tenant.subdomain %>.<%= rootDomain %></p>
     </div>
   </div>
 
@@ -20,10 +20,6 @@
     <div class="info-item">
       <label>Email</label>
       <p><%= user.email %></p>
-    </div>
-    <div class="info-item">
-      <label>Tenant</label>
-      <p><%= user.tenant.name %></p>
     </div>
     <div class="info-item">
       <label>Subdomain</label>
