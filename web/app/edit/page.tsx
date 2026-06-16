@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../auth.module.css";
+import LogoutButton from "../components/LogoutButton";
 
 type Me = {
   id: string;
@@ -10,6 +11,14 @@ type Me = {
   email: string;
   imageUrl: string | null;
   tenant: { subdomain: string; customDomain: string | null };
+};
+
+type DomainVerify = {
+  domain: string | null;
+  verified: boolean;
+  expectedIp: string | null;
+  addresses: string[];
+  status: "none" | "valid" | "pending";
 };
 
 export default function EditPage() {
@@ -22,6 +31,44 @@ export default function EditPage() {
   const [email, setEmail] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [image, setImage] = useState<File | null>(null);
+
+  const [domainStatus, setDomainStatus] = useState<DomainVerify | null>(null);
+  const verifyTimer = useRef<number | null>(null);
+
+  const rootDomain = useMemo(
+    () => process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me",
+    [],
+  );
+
+  function dnsHostHint(domain: string) {
+    if (!domain || !domain.includes(".")) return "@ (or your domain root)";
+    const parts = domain.split(".");
+    if (parts.length <= 2) return "@ (or your domain root)";
+    return `${parts[0]} (subdomain)`;
+  }
+
+  const verifyDomain = useCallback(async (domain?: string) => {
+    const value = (domain ?? customDomain).trim().toLowerCase();
+    if (!value) {
+      setDomainStatus(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/custom-domain/verify?domain=${encodeURIComponent(value)}`, {
+        headers: { accept: "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      setDomainStatus((await res.json()) as DomainVerify);
+    } catch {
+      // ignore
+    }
+  }, [customDomain]);
+
+  function scheduleVerify(nextValue: string) {
+    if (verifyTimer.current) window.clearTimeout(verifyTimer.current);
+    verifyTimer.current = window.setTimeout(() => verifyDomain(nextValue), 400);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +83,7 @@ export default function EditPage() {
         setUsername(data.username || "");
         setEmail(data.email || "");
         setCustomDomain(data.tenant?.customDomain || "");
+        if (data.tenant?.customDomain) verifyDomain(data.tenant.customDomain);
       })
       .catch(() => {
         if (!cancelled) window.location.href = "/login";
@@ -43,7 +91,13 @@ export default function EditPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [verifyDomain]);
+
+  useEffect(() => {
+    if (!customDomain.trim()) return;
+    const t = window.setInterval(() => verifyDomain(customDomain), 15000);
+    return () => window.clearInterval(t);
+  }, [customDomain, verifyDomain]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,6 +127,7 @@ export default function EditPage() {
       setMe(data);
       setSuccess("Profile updated.");
       setImage(null);
+      if (customDomain.trim()) verifyDomain(customDomain);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -87,6 +142,22 @@ export default function EditPage() {
         <p className={styles.muted}>Update your public profile. If you set a custom domain, you may need DNS.</p>
         {error ? <div className={styles.error}>{error}</div> : null}
         {success ? <div className={styles.success}>{success}</div> : null}
+
+        {me ? (
+          <div className={styles.panel}>
+            <div className={styles.panelRow}>
+              <div>
+                <div style={{ fontWeight: 800 }}>Your site</div>
+                <div className={styles.mono}>
+                  {username.toLowerCase()}.{rootDomain}
+                </div>
+              </div>
+              <Link className={styles.link} href="/">
+                Public page
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         {me?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -127,11 +198,44 @@ export default function EditPage() {
               name="customDomain"
               autoComplete="url"
               value={customDomain}
-              onChange={(e) => setCustomDomain(e.target.value)}
+              onChange={(e) => {
+                setCustomDomain(e.target.value);
+                scheduleVerify(e.target.value);
+              }}
               placeholder="mysite.com"
               disabled={loading}
             />
           </label>
+          {domainStatus?.domain ? (
+            <div className={styles.panel}>
+              <div className={styles.panelRow}>
+                <div className={styles.mono}>{domainStatus.domain}</div>
+                <span
+                  className={[
+                    styles.badge,
+                    domainStatus.verified ? styles.badgeValid : styles.badgePending,
+                  ].join(" ")}
+                >
+                  {domainStatus.verified ? "✓ Valid configuration" : "Pending DNS"}
+                </span>
+              </div>
+              <div className={styles.hint}>
+                {domainStatus.verified
+                  ? "DNS is pointing to this server. HTTPS will be issued automatically on first visit."
+                  : domainStatus.expectedIp
+                    ? `Add an A record pointing to ${domainStatus.expectedIp}. Checking again…`
+                    : "Configure DNS at your domain provider. Checking again…"}
+                {domainStatus.expectedIp ? (
+                  <>
+                    <br />
+                    <span className={styles.mono}>
+                      A {dnsHostHint(domainStatus.domain)} → {domainStatus.expectedIp}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <label className={styles.label}>
             Profile image (optional)
             <input
@@ -147,12 +251,7 @@ export default function EditPage() {
             <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
               {loading ? "Saving…" : "Save"}
             </button>
-            <Link className={styles.link} href="/">
-              View public profile
-            </Link>
-            <Link className={styles.link} href="/logout">
-              Logout
-            </Link>
+            <LogoutButton className={styles.link}>Logout</LogoutButton>
           </div>
         </form>
       </div>

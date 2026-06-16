@@ -444,6 +444,12 @@ app.post("/api/auth/logout", async (req, res) => {
   return res.json({ ok: true });
 });
 
+// Convenience logout for simple <a href="..."> links
+app.get("/api/auth/logout", async (req, res) => {
+  clearAuthCookie(res, req);
+  return res.redirect("/login");
+});
+
 async function deleteProfileImage(imageUrl) {
   if (!imageUrl?.startsWith("/api/uploads/")) return;
   const filename = path.basename(imageUrl);

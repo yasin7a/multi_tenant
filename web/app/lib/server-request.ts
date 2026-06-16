@@ -1,9 +1,23 @@
 import { headers } from "next/headers";
 
+function normalizeForwardedHeader(value: string | null) {
+  return (value || "").split(",")[0].trim();
+}
+
+export async function getRequestHostHeader() {
+  const h = await headers();
+  return (
+    normalizeForwardedHeader(h.get("x-forwarded-host")) ||
+    normalizeForwardedHeader(h.get("host")) ||
+    "localhost"
+  );
+}
+
 export async function getRequestHost() {
   const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost";
-  return host.split(",")[0].trim();
+  const host = normalizeForwardedHeader(h.get("x-forwarded-host")) || normalizeForwardedHeader(h.get("host")) || "localhost";
+  // Strip port for hostname parsing (e.g. "tenant.lvh.me:3000" -> "tenant.lvh.me")
+  return host.replace(/:\d+$/, "");
 }
 
 export async function getRequestProtocol() {
@@ -13,8 +27,14 @@ export async function getRequestProtocol() {
 }
 
 export async function getRequestOrigin() {
-  const [proto, host] = await Promise.all([getRequestProtocol(), getRequestHost()]);
-  return `${proto}://${host}`;
+  // IMPORTANT: keep port (e.g. :3000) for dev so same-origin /api rewrites work.
+  const [proto, hostHeader] = await Promise.all([getRequestProtocol(), getRequestHostHeader()]);
+  return `${proto}://${hostHeader}`;
+}
+
+export async function getRequestCookieHeader() {
+  const h = await headers();
+  return h.get("cookie") || "";
 }
 
 export function getApiOrigin() {
