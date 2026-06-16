@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import styles from "./page.module.css";
 import { parseHost } from "./lib/tenant";
 import { getRequestCookieHeader, getRequestHost, getRequestOrigin } from "./lib/server-request";
@@ -53,6 +54,14 @@ async function resolveHostViaApi(origin: string, host: string): Promise<HostCtx>
   return (await res.json()) as HostCtx;
 }
 
+function shouldRedirectToCustomDomain(currentHost: string, profile: PublicProfile) {
+  const custom = profile.tenant.customDomain;
+  if (!custom) return null;
+  if (currentHost === custom) return null;
+  // If we can see a custom domain for this profile, always canonicalize to it.
+  return custom;
+}
+
 async function getMe(origin: string, host: string) {
   const cookie = await getRequestCookieHeader();
   if (!cookie) return null;
@@ -68,45 +77,47 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost();
   const origin = await getRequestOrigin();
   let hostCtx = parseHost(host) as HostCtx;
-  if (hostCtx.type === "unknown") {
-    hostCtx = await resolveHostViaApi(origin, host);
-  }
+  if (hostCtx.type === "unknown") hostCtx = await resolveHostViaApi(origin, host);
 
-  if (hostCtx.type === "tenant") {
-    const profile = await getTenantPublicProfile(origin, host);
-    if (!profile) {
-      return {
-        title: "Site not found",
-        description: `The tenant ${hostCtx.subdomain} does not exist.`,
-        alternates: { canonical: origin },
-      };
-    }
-
-    const title = `${profile.username}'s profile`;
-    const description = profile.tenant.customDomain
-      ? `Public profile of ${profile.username} at ${profile.tenant.customDomain}`
-      : `Public profile of ${profile.username} at ${profile.tenant.subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"}`;
-    const image = profile.imageUrl ? `${origin}${profile.imageUrl}` : undefined;
-
+  // Robust fallback for custom domains: attempt to fetch profile anyway.
+  const profile = await getTenantPublicProfile(origin, host);
+  if (!profile) {
+    const tenantName =
+      hostCtx.type === "tenant" ? hostCtx.subdomain : hostCtx.type === "unknown" ? hostCtx.host : host;
     return {
-      title,
-      description,
+      title: "Site not found",
+      description: `The tenant ${tenantName} does not exist.`,
       alternates: { canonical: origin },
-      openGraph: {
-        type: "profile",
-        title,
-        description,
-        url: origin,
-        images: image ? [{ url: image }] : undefined,
-      },
-      twitter: {
-        card: image ? "summary_large_image" : "summary",
-        title,
-        description,
-        images: image ? [image] : undefined,
-      },
     };
   }
+
+  const title = `${profile.username}'s profile`;
+  const description = profile.tenant.customDomain
+    ? `Public profile of ${profile.username} at ${profile.tenant.customDomain}`
+    : `Public profile of ${profile.username} at ${profile.tenant.subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"}`;
+  const image = profile.imageUrl ? `${origin}${profile.imageUrl}` : undefined;
+
+  const canonicalHost = shouldRedirectToCustomDomain(host, profile) || host;
+  const canonical = `${origin.startsWith("https:") ? "https" : "http"}://${canonicalHost}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: "profile",
+      title,
+      description,
+      url: canonical,
+      images: image ? [{ url: image }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
 
   return {
     title: "Multi Tenant App",
@@ -123,11 +134,14 @@ export default async function Home() {
     hostCtx = await resolveHostViaApi(origin, host);
   }
 
-  if (hostCtx.type === "tenant") {
-    const [profile, me] = await Promise.all([
-      getTenantPublicProfile(origin, host),
-      getMe(origin, host),
-    ]);
+  const profile = await getTenantPublicProfile(origin, host);
+  if (profile) {
+    const canonicalCustom = shouldRedirectToCustomDomain(host, profile);
+    if (canonicalCustom) {
+      redirect(`https://${canonicalCustom}`);
+    }
+
+    const me = await getMe(origin, host);
 
     return (
       <div className={styles.page}>
@@ -136,7 +150,15 @@ export default async function Home() {
             <>
               <h1>Site not found</h1>
               <p>
-                The tenant <b>{hostCtx.subdomain}</b> does not exist.
+                The tenant{" "}
+                <b>
+                  {hostCtx.type === "tenant"
+                    ? hostCtx.subdomain
+                    : hostCtx.type === "unknown"
+                      ? hostCtx.host
+                      : host}
+                </b>{" "}
+                does not exist.
               </p>
               <p>
                 <Link href="/login">Login</Link> or <Link href="/register">Register</Link>
