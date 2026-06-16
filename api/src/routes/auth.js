@@ -5,6 +5,7 @@ import { getAuthUser, isWrongTenantLogin } from "../lib/auth.js";
 import { setAuthCookie, clearAuthCookie } from "../lib/auth-cookies.js";
 import { createAuthHandoff, consumeAuthHandoff } from "../lib/auth-handoff.js";
 import { resolveHost } from "../lib/hosts.js";
+import { getRequestHostname } from "../lib/request-host.js";
 import { getTenantBaseUrl, isCustomDomainActive } from "../lib/urls.js";
 
 const router = Router();
@@ -57,7 +58,8 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const hostCtx = await resolveHost(req.hostname);
+  const host = getRequestHostname(req);
+  const hostCtx = await resolveHost(host);
   const { email, password } = req.body || {};
   if (!email || !password)
     return res.status(400).json({ error: "email and password are required" });
@@ -66,7 +68,11 @@ router.post("/login", async (req, res) => {
     where: { email },
     include: {
       tenant: {
-        select: { subdomain: true, customDomain: true, customDomainEnabled: true },
+        select: {
+          subdomain: true,
+          customDomain: true,
+          customDomainEnabled: true,
+        },
       },
     },
   });
@@ -85,10 +91,7 @@ router.post("/login", async (req, res) => {
 
   setAuthCookie(res, req, user.id);
 
-  if (
-    isCustomDomainActive(user.tenant) &&
-    req.hostname !== user.tenant.customDomain
-  ) {
+  if (isCustomDomainActive(user.tenant) && host !== user.tenant.customDomain) {
     const token = createAuthHandoff(user.id);
     return res.json({
       isLoggedIn: true,

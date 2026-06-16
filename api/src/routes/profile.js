@@ -5,14 +5,19 @@ import { getAuthUser } from "../lib/auth.js";
 import { createAuthHandoff } from "../lib/auth-handoff.js";
 import { normalizeCustomDomain, isValidCustomDomain } from "../lib/domains.js";
 import { resolveHost } from "../lib/hosts.js";
+import { getRequestHostname } from "../lib/request-host.js";
 import { publicProfileSelect, authUserSelect } from "../lib/selects.js";
-import { upload, deleteProfileImage, withNormalizedImage } from "../lib/uploads.js";
+import {
+  upload,
+  deleteProfileImage,
+  withNormalizedImage,
+} from "../lib/uploads.js";
 import { getTenantBaseUrl, isCustomDomainActive } from "../lib/urls.js";
 
 const router = Router();
 
 router.get("/public", async (req, res) => {
-  const hostCtx = await resolveHost(req.hostname);
+  const hostCtx = await resolveHost(getRequestHostname(req));
   if (hostCtx.type !== "tenant")
     return res.status(404).json({ error: "profile not found" });
 
@@ -35,13 +40,14 @@ router.get("/me", async (req, res) => {
 });
 
 router.post("/", upload.single("image"), async (req, res) => {
-  const hostCtx = await resolveHost(req.hostname);
+  const host = getRequestHostname(req);
+  const hostCtx = await resolveHost(host);
   const authUser = await getAuthUser(req.cookies.userId);
   if (!authUser) return res.status(401).json({ error: "not authenticated" });
 
   if (hostCtx.type === "tenant") {
     if (hostCtx.isCustomDomain) {
-      if (authUser.tenant.customDomain !== req.hostname)
+      if (authUser.tenant.customDomain !== host)
         return res.status(403).json({ error: "wrong tenant host" });
     } else if (authUser.tenant.subdomain !== hostCtx.subdomain) {
       return res.status(403).json({ error: "wrong tenant host" });
@@ -127,7 +133,7 @@ router.post("/", upload.single("image"), async (req, res) => {
 
   if (
     isCustomDomainActive(updatedUser.tenant) &&
-    req.hostname !== updatedUser.tenant.customDomain
+    host !== updatedUser.tenant.customDomain
   ) {
     const token = createAuthHandoff(updatedUser.id);
     const payload = withNormalizedImage(updatedUser);
