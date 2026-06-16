@@ -1,0 +1,127 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 520px;
+  border: 1px solid #ebebeb;
+  border-radius: 16px;
+  padding: 28px;
+  background: #fff;
+}
+
+.title {
+  margin: 0 0 14px;
+  font-size: 28px;
+  letter-spacing: -0.8px;
+}
+
+.muted {
+  margin: 0 0 18px;
+  color: #666;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #ffd2d2;
+  background: #fff5f5;
+  color: #7a1a1a;
+  border-radius: 10px;
+}
+
+.success {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #cdeccd;
+  background: #f3fff3;
+  color: #1f5f1f;
+  border-radius: 10px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #ebebeb;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.button {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #ebebeb;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.buttonPrimary {
+  background: #000;
+  color: #fff;
+  border-color: transparent;
+}
+
+.link {
+  color: #000;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #000;
+    border-color: #1a1a1a;
+  }
+  .muted {
+    color: #999;
+  }
+  .input {
+    background: #000;
+    border-color: #1a1a1a;
+    color: #ededed;
+  }
+  .button {
+    background: #000;
+    color: #ededed;
+    border-color: #1a1a1a;
+  }
+  .buttonPrimary {
+    background: #ededed;
+    color: #000;
+  }
+  .link {
+    color: #ededed;
+  }
+}
+

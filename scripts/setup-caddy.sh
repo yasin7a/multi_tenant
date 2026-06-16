@@ -2,9 +2,15 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")}"
+API_DIR="$DIR/apps/api"
+
+ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-multi.takitahmid.com}"
-APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")}"
+
+APP_PORT="${APP_PORT:-$(grep -E '^API_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
 APP_PORT="${APP_PORT:-9097}"
 LE_CERT="/etc/letsencrypt/live/${ROOT_DOMAIN}/fullchain.pem"
 CADDY_CERT_DIR="/etc/caddy/certs"

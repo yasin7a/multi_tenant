@@ -1,0 +1,30 @@
+{
+  "name": "multi-tenant-api",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon --watch src --exec node src/index.js",
+    "p:gen": "npx prisma generate --schema prisma/schema.prisma",
+    "p:migrate": "npx prisma migrate dev --schema prisma/schema.prisma",
+    "p:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
+    "seed": "node prisma/seed.js"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "prisma": "^7.0.0"
+  }
+}
+
