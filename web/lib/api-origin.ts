@@ -20,7 +20,7 @@ export function getApiOrigin() {
 
 /** Client-safe API base URL — uses NEXT_PUBLIC_ROOT_DOMAIN from env.
  *  Dev (lvh.me): http://lvh.me:3000  → Next.js proxies /api/* to backend
- *  Prod:         https://<root>      → Caddy proxies /api/* to backend
+ *  Prod:         "" (relative)       → Caddy routes /api/* on same domain, no CORS
  */
 export function getClientApiBase() {
   const root = resolveRootDomain();
@@ -28,5 +28,7 @@ export function getClientApiBase() {
     const port = process.env.NEXT_PUBLIC_WEB_PORT || "3000";
     return `http://${root}:${port}`;
   }
-  return `https://${root}`;
+  // Production: relative URLs — browser uses current origin.
+  // Works for main domain, subdomains, AND custom domains via Caddy.
+  return "";
 }

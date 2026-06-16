@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import multer from "multer";
-import { ALLOWED_IMAGE_TYPES, UPLOADS_DIR } from "../config.js";
+import { ALLOWED_IMAGE_TYPES, PUBLIC_URL, UPLOADS_DIR } from "../config.js";
 
 export async function ensureUploadsDir() {
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
@@ -68,5 +68,10 @@ export function normalizeImageUrl(imageUrl) {
 
 export function withNormalizedImage(user) {
   if (!user) return user;
-  return { ...user, imageUrl: normalizeImageUrl(user.imageUrl) };
+  const imageUrl = normalizeImageUrl(user.imageUrl);
+  // Prepend PUBLIC_URL so images work on custom domains & subdomains
+  if (imageUrl && PUBLIC_URL && !imageUrl.startsWith("http")) {
+    return { ...user, imageUrl: `${PUBLIC_URL}${imageUrl}` };
+  }
+  return { ...user, imageUrl };
 }
