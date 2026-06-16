@@ -1,5 +1,7 @@
-import { getServerRootDomain } from "@/lib/root-domain";
+import { getServerRootDomain, inferRootDomainFromHost } from "@/lib/root-domain";
 import type { HostContext } from "@/types";
+
+const DEV_ROOT = "lvh.me";
 
 export function getRootDomain() {
   return getServerRootDomain();
@@ -14,6 +16,15 @@ export function isLocalhostHost(hostname: string) {
 }
 
 export function parseHost(hostname: string): HostContext {
+  if (hostname === DEV_ROOT || hostname.endsWith(`.${DEV_ROOT}`)) {
+    if (hostname === DEV_ROOT) return { type: "main" };
+    return {
+      type: "tenant",
+      subdomain: hostname.slice(0, -(DEV_ROOT.length + 1)),
+      isCustomDomain: false,
+    };
+  }
+
   const root = getRootDomain();
 
   if (hostname === "localhost" || hostname === root) {
@@ -34,9 +45,12 @@ export function parseHost(hostname: string): HostContext {
 }
 
 export function getTenantWebUrl(subdomain: string) {
-  const root = getRootDomain();
   const port = getWebPort();
   const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+  const root =
+    typeof window !== "undefined"
+      ? inferRootDomainFromHost(window.location.hostname)
+      : getRootDomain();
   const host = `${subdomain}.${root}`;
   const isDev = port && port !== "80" && port !== "443";
   return `${protocol}//${host}${isDev ? `:${port}` : ""}`;

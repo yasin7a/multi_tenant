@@ -15,7 +15,10 @@ async function getCustomDomainIfAny(request: NextRequest) {
   // Only canonicalize platform subdomains (custom domains are already canonical).
   if (!host.endsWith(`.${root}`)) return null;
 
-  const apiOrigin = process.env.API_ORIGIN || "http://127.0.0.1:9097";
+  const apiOrigin =
+    process.env.NODE_ENV === "production"
+      ? process.env.API_ORIGIN || "http://127.0.0.1:9097"
+      : process.env.API_ORIGIN || "http://localhost:9097";
   const res = await fetch(`${apiOrigin}/api/profile/public`, {
     headers: {
       host,
@@ -40,9 +43,12 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const loggedIn = isLoggedIn(request);
 
-  // Canonicalize: if tenant has a custom domain, always redirect to it
-  // even if the user is not logged in.
-  if (!pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
+  // Canonicalize custom domain in production only (dev stays on subdomain/localhost).
+  if (
+    process.env.NODE_ENV === "production" &&
+    !pathname.startsWith("/api") &&
+    !pathname.startsWith("/_next")
+  ) {
     try {
       const custom = await getCustomDomainIfAny(request);
       if (custom) {

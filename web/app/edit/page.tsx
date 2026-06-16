@@ -41,8 +41,14 @@ export default function EditPage() {
         setCustomDomainDisabled(data.tenant?.customDomainEnabled === false);
         if (data.rootDomain) setRootDomain(data.rootDomain);
       })
-      .catch(() => {
-        if (!cancelled) window.location.href = "/login";
+      .catch(async () => {
+        if (cancelled) return;
+        try {
+          await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+        } catch {
+          // ignore
+        }
+        window.location.href = "/login?next=/edit";
       });
     return () => {
       cancelled = true;

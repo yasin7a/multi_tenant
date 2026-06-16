@@ -1,5 +1,5 @@
 import { ROOT_DOMAIN } from "../config.js";
-import { isPlatformHost } from "./hosts.js";
+import { isLvhHost, isPlatformHost } from "./hosts.js";
 
 export function authCookieOptions(req) {
   const secure = (req.headers["x-forwarded-proto"] || req.protocol) === "https";
@@ -14,7 +14,7 @@ export function authCookieOptions(req) {
   const hostname = req.hostname;
   if (isPlatformHost(hostname)) {
     if (hostname !== "localhost" && !hostname.endsWith(".localhost")) {
-      options.domain = `.${ROOT_DOMAIN}`;
+      options.domain = isLvhHost(hostname) ? ".lvh.me" : `.${ROOT_DOMAIN}`;
     }
   }
 

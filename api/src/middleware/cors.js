@@ -11,6 +11,9 @@ export function createCors() {
     }
   }
   allowedOrigins.add(`http://${ROOT_DOMAIN}:${WEB_PORT}`);
+  allowedOrigins.add(`http://localhost:${WEB_PORT}`);
+  allowedOrigins.add(`http://127.0.0.1:${WEB_PORT}`);
+  allowedOrigins.add(`http://lvh.me:${WEB_PORT}`);
 
   return cors({
     credentials: true,
@@ -20,7 +23,11 @@ export function createCors() {
       try {
         const url = new URL(origin);
         const isDevSubdomain =
-          url.hostname === ROOT_DOMAIN || url.hostname.endsWith(`.${ROOT_DOMAIN}`);
+          url.hostname === ROOT_DOMAIN ||
+          url.hostname.endsWith(`.${ROOT_DOMAIN}`) ||
+          url.hostname === "lvh.me" ||
+          url.hostname.endsWith(".lvh.me") ||
+          url.hostname === "localhost";
         const isDevPort = String(url.port || "") === String(WEB_PORT);
         if (
           isDevSubdomain &&

@@ -15,3 +15,10 @@ export function getClientRootDomain() {
 export function tenantSiteHost(subdomain: string, rootDomain: string) {
   return `${subdomain}.${rootDomain}`;
 }
+
+/** Pick lvh.me vs production root based on current browser host (client only). */
+export function inferRootDomainFromHost(hostname: string): string {
+  if (hostname === "lvh.me" || hostname.endsWith(".lvh.me")) return "lvh.me";
+  if (hostname === "localhost" || hostname === "127.0.0.1") return "lvh.me";
+  return getServerRootDomain();
+}

@@ -80,7 +80,10 @@ export default async function Home() {
 
   const profile = await getPublicProfile(fetchOrigin, host);
   if (profile) {
-    const canonicalCustom = shouldRedirectToCustomDomain(host, profile);
+    const canonicalCustom =
+      process.env.NODE_ENV === "production"
+        ? shouldRedirectToCustomDomain(host, profile)
+        : null;
     if (canonicalCustom) redirect(`https://${canonicalCustom}`);
 
     const me = await getMe(fetchOrigin, host, cookie);
