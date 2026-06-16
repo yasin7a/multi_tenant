@@ -165,7 +165,6 @@ export default function CustomDomainSection({
               style={{
                 marginTop: 10,
                 padding: 10,
-                background: "#fafafa",
                 borderRadius: 8,
                 border: "1px solid #ebebeb",
               }}
