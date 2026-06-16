@@ -58,7 +58,12 @@
       </p>
     </div>
 
-    <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
+    <% if (user.tenant.customDomain) { %>
+      <p class="meta">Your site: <strong><a href="<%= tenantBaseUrl %>"><%= user.tenant.customDomain %></a></strong></p>
+      <p class="meta">Also at: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong></p>
+    <% } else { %>
+      <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
+    <% } %>
     <button type="submit" class="btn-block">Save changes</button>
   </form>
 
@@ -160,10 +165,10 @@
     <% if (user.tenant.customDomain) { %>
       <span class="site-link-domain">
         <% if (customDomainVerified) { %><span class="domain-check inline" title="Valid Configuration">✓</span><% } %>
-        <a href="https://<%= user.tenant.customDomain %>"><%= user.tenant.customDomain %></a>
+        <a href="<%= tenantBaseUrl %>"><%= user.tenant.customDomain %></a>
       </span>
-      <span class="meta"> · </span>
+    <% } else { %>
+      <a href="/" id="public-page-link"><%= user.tenant.subdomain %>.<%= rootDomain %></a>
     <% } %>
-    <a href="/" id="public-page-link"><%= user.tenant.subdomain %>.<%= rootDomain %></a>
   </div>
 </div>

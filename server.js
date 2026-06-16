@@ -26,6 +26,7 @@ const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
 const PORT = process.env.PORT || 3000
 const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, '')
 const SERVER_IP = process.env.SERVER_IP || ''
+const authHandoffs = new Map()
 
 const app = Fastify({ logger: true, trustProxy: true })
 
@@ -70,6 +71,34 @@ function clearAuthCookie(reply, request) {
   }
 
   reply.clearCookie('userId', options)
+}
+
+function createAuthHandoff(userId) {
+  const token = randomBytes(24).toString('hex')
+  authHandoffs.set(token, { userId, expires: Date.now() + 2 * 60 * 1000 })
+  return token
+}
+
+function consumeAuthHandoff(token) {
+  const entry = authHandoffs.get(token)
+  if (!entry || entry.expires < Date.now()) {
+    authHandoffs.delete(token)
+    return null
+  }
+
+  authHandoffs.delete(token)
+  return entry.userId
+}
+
+function redirectToTenant(reply, request, tenant, path, userId = null) {
+  const targetPath = path.startsWith('/') ? path : `/${path}`
+
+  if (tenant.customDomain && request.hostname !== tenant.customDomain && userId) {
+    const token = createAuthHandoff(userId)
+    return reply.redirect(`${getTenantBaseUrl(tenant)}/auth/continue?token=${token}&next=${encodeURIComponent(targetPath)}`)
+  }
+
+  return reply.redirect(getTenantUrl(request, tenant, targetPath))
 }
 
 function normalizeCustomDomain(value) {
@@ -165,6 +194,63 @@ function getSiteUrl(subdomain) {
   return `http://${subdomain}.${ROOT_DOMAIN}:${PORT}`
 }
 
+function getTenantBaseUrl(tenant) {
+  if (tenant.customDomain) {
+    return `${getPublicProtocol()}://${tenant.customDomain}`
+  }
+
+  return getSiteUrl(tenant.subdomain)
+}
+
+function isOnTenantHost(request, tenant) {
+  const host = request.hostname
+
+  if (tenant.customDomain && host === tenant.customDomain) {
+    return true
+  }
+
+  if (host === `${tenant.subdomain}.${ROOT_DOMAIN}`) {
+    return true
+  }
+
+  if (host.endsWith('.localhost')) {
+    const subdomain = host.slice(0, -'.localhost'.length)
+    return subdomain === tenant.subdomain
+  }
+
+  return false
+}
+
+function getTenantUrl(request, tenant, path = '/') {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+
+  if (request && isOnTenantHost(request, tenant)) {
+    return getRequestUrl(request, normalizedPath)
+  }
+
+  return `${getTenantBaseUrl(tenant)}${normalizedPath}`
+}
+
+function shouldCanonicalizeToCustomDomain(request, tenant) {
+  if (!tenant.customDomain || request.hostname === tenant.customDomain) {
+    return false
+  }
+
+  return request.hostname === `${tenant.subdomain}.${ROOT_DOMAIN}`
+}
+
+function isWrongTenantLogin(request, hostCtx, user) {
+  if (hostCtx.type !== 'tenant') {
+    return false
+  }
+
+  if (hostCtx.isCustomDomain) {
+    return user.tenant.customDomain !== request.hostname
+  }
+
+  return user.tenant.subdomain !== hostCtx.subdomain
+}
+
 function getTenantPublicUrl(tenant) {
   if (tenant.customDomain) {
     return `${getPublicProtocol()}://${tenant.customDomain}`
@@ -213,27 +299,26 @@ function getProfileUrl(request, authUser) {
     return request ? getRequestUrl(request, '/login') : getMainUrl('/login')
   }
 
-  if (!request) {
-    return `${getSiteUrl(authUser.tenant.subdomain)}/edit`
-  }
-
-  const host = request.hostname
-
-  if (authUser.tenant.customDomain === host) {
-    return getRequestUrl(request, '/edit')
-  }
-
-  if (host.endsWith(`.${ROOT_DOMAIN}`)) {
-    const subdomain = host.slice(0, -(ROOT_DOMAIN.length + 1))
-    if (subdomain === authUser.tenant.subdomain && !subdomain.includes('.')) {
-      return getRequestUrl(request, '/edit')
-    }
-  }
-
-  return `${getSiteUrl(authUser.tenant.subdomain)}/edit`
+  return getTenantUrl(request, authUser.tenant, '/edit')
 }
 
 function getNavUrls(request, authUser) {
+  if (authUser?.tenant.customDomain) {
+    const tenant = authUser.tenant
+    const onCustomDomain = request?.hostname === tenant.customDomain
+    const url = (path) => (
+      onCustomDomain && request ? getRequestUrl(request, path) : `${getTenantBaseUrl(tenant)}${path}`
+    )
+
+    return {
+      mainUrl: url('/'),
+      loginUrl: url('/login'),
+      registerUrl: url('/register'),
+      profileUrl: url('/edit'),
+      logoutUrl: url('/logout'),
+    }
+  }
+
   const base = request ? getRequestUrl(request, '/') : getMainUrl()
 
   return {
@@ -379,6 +464,16 @@ async function renderTenantNotFound(reply, request, subdomain) {
   return reply.code(404).type('text/html').send(html)
 }
 
+async function renderLoginPage(reply, request, { error = null, values = {}, redirectUrl = null, redirectSeconds = 5 } = {}) {
+  return renderPage(reply, 'login.ejs', {
+    title: 'Login',
+    error,
+    values,
+    redirectUrl,
+    redirectSeconds,
+  }, request)
+}
+
 async function renderProfileEdit(reply, request, user, { error = null, success = null } = {}) {
   let customDomainVerified = false
   if (user.tenant.customDomain) {
@@ -392,6 +487,7 @@ async function renderProfileEdit(reply, request, user, { error = null, success =
     rootDomain: ROOT_DOMAIN,
     serverIp: SERVER_IP,
     customDomainVerified,
+    tenantBaseUrl: getTenantBaseUrl(user.tenant),
     error,
     success,
   }, request)
@@ -422,6 +518,10 @@ async function renderPublicProfile(request, reply, subdomain) {
     return renderTenantNotFound(reply, request, subdomain)
   }
 
+  if (shouldCanonicalizeToCustomDomain(request, user.tenant)) {
+    return reply.redirect(`${getTenantBaseUrl(user.tenant)}${request.url}`)
+  }
+
   if (wantsJson(request)) {
     return {
       username: user.username,
@@ -449,6 +549,10 @@ async function renderPublicProfile(request, reply, subdomain) {
 
 async function renderSubdomainEdit(request, reply, subdomain) {
   const authUser = await getAuthUser(request.cookies.userId)
+
+  if (authUser?.tenant.subdomain === subdomain && shouldCanonicalizeToCustomDomain(request, authUser.tenant)) {
+    return redirectToTenant(reply, request, authUser.tenant, '/edit', authUser.id)
+  }
 
   if (!authUser || authUser.tenant.subdomain !== subdomain) {
     if (wantsJson(request)) {
@@ -486,6 +590,20 @@ app.get('/internal/caddy-ask', async (request, reply) => {
   })
 
   return tenant ? reply.code(200).send('ok') : reply.code(403).send()
+})
+
+app.get('/auth/continue', async (request, reply) => {
+  const userId = consumeAuthHandoff(request.query.token)
+  const nextPath = typeof request.query.next === 'string' && request.query.next.startsWith('/')
+    ? request.query.next
+    : '/edit'
+
+  if (!userId) {
+    return reply.redirect(getRequestUrl(request, '/login'))
+  }
+
+  setAuthCookie(reply, request, userId)
+  return reply.redirect(getRequestUrl(request, nextPath))
 })
 
 app.get('/api/custom-domain/verify', async (request, reply) => {
@@ -640,14 +758,11 @@ app.get('/edit', async (request, reply) => {
 })
 
 app.get('/login', async (request, reply) => {
-  return renderPage(reply, 'login.ejs', {
-    title: 'Login',
-    error: null,
-    values: {},
-  }, request)
+  return renderLoginPage(reply, request)
 })
 
 app.post('/login', async (request, reply) => {
+  const hostCtx = await resolveHost(request)
   const { email, password } = request.body
 
   if (!email || !password) {
@@ -655,16 +770,15 @@ app.post('/login', async (request, reply) => {
       return reply.code(400).send({ error: 'email and password are required' })
     }
 
-    return renderPage(reply, 'login.ejs', {
-      title: 'Login',
+    return renderLoginPage(reply, request, {
       error: 'Email and password are required.',
       values: { email },
-    }, request)
+    })
   }
 
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { tenant: { select: { subdomain: true } } },
+    include: { tenant: { select: { subdomain: true, customDomain: true } } },
   })
 
   if (!user) {
@@ -672,11 +786,10 @@ app.post('/login', async (request, reply) => {
       return reply.code(401).send({ error: 'invalid credentials' })
     }
 
-    return renderPage(reply, 'login.ejs', {
-      title: 'Login',
+    return renderLoginPage(reply, request, {
       error: 'Invalid credentials.',
       values: { email },
-    }, request)
+    })
   }
 
   const valid = await bcrypt.compare(password, user.password)
@@ -686,17 +799,39 @@ app.post('/login', async (request, reply) => {
       return reply.code(401).send({ error: 'invalid credentials' })
     }
 
-    return renderPage(reply, 'login.ejs', {
-      title: 'Login',
+    return renderLoginPage(reply, request, {
       error: 'Invalid credentials.',
       values: { email },
-    }, request)
+    })
+  }
+
+  if (isWrongTenantLogin(request, hostCtx, user)) {
+    const redirectUrl = `${getTenantBaseUrl(user.tenant)}/login`
+
+    if (wantsJson(request)) {
+      return reply.code(403).send({
+        error: 'wrong tenant',
+        message: 'This site belongs to someone else.',
+        redirectUrl,
+      })
+    }
+
+    return renderLoginPage(reply, request, {
+      error: 'This site belongs to someone else. Redirecting you to your site…',
+      values: { email },
+      redirectUrl,
+      redirectSeconds: 5,
+    })
   }
 
   setAuthCookie(reply, request, user.id)
 
   if (wantsJson(request)) {
     return { isLoggedIn: true, userId: user.id }
+  }
+
+  if (user.tenant.customDomain && request.hostname !== user.tenant.customDomain) {
+    return redirectToTenant(reply, request, user.tenant, '/edit', user.id)
   }
 
   return reply.redirect(getProfileUrl(request, user))
@@ -722,10 +857,10 @@ app.post('/edit', async (request, reply) => {
 
   if (hostCtx.isCustomDomain) {
     if (authUser.tenant.customDomain !== request.hostname) {
-      return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
+      return reply.redirect(getTenantUrl(null, authUser.tenant, '/edit'))
     }
   } else if (!currentSubdomain || authUser.tenant.subdomain !== currentSubdomain) {
-    return reply.redirect(`${getSiteUrl(authUser.tenant.subdomain)}/edit`)
+    return reply.redirect(getTenantUrl(null, authUser.tenant, '/edit'))
   }
 
   const { username, email, customDomain: customDomainRaw, newImageUrl, imageError } = await parseEditRequest(request)
@@ -877,8 +1012,12 @@ app.post('/edit', async (request, reply) => {
     }
   }
 
+  if (updatedUser.tenant.customDomain && request.hostname !== updatedUser.tenant.customDomain) {
+    return redirectToTenant(reply, request, updatedUser.tenant, '/edit', updatedUser.id)
+  }
+
   if (updatedUser.tenant.subdomain !== currentSubdomain) {
-    return reply.redirect(`${getSiteUrl(updatedUser.tenant.subdomain)}/edit`)
+    return reply.redirect(getTenantUrl(request, updatedUser.tenant, '/edit'))
   }
 
   return renderProfileEdit(reply, request, updatedUser, {

@@ -544,6 +544,10 @@ input:disabled {
   align-items: center;
 }
 
+.redirect-countdown {
+  margin-top: 0.75rem;
+}
+
 /* Public site */
 .site-hero {
   text-align: center;
