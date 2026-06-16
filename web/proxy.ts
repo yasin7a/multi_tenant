@@ -56,6 +56,7 @@ export async function proxy(request: NextRequest) {
         const url = request.nextUrl.clone();
         url.hostname = custom;
         url.protocol = "https:";
+        url.port = "";
         // keep pathname + search
         return NextResponse.redirect(url);
       }
