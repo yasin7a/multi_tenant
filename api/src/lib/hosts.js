@@ -49,8 +49,8 @@ export async function resolveHost(hostname) {
   }
 
   const tenant = await prisma.tenant.findFirst({
-    where: { customDomain: host, customDomainEnabled: true },
-    select: { subdomain: true },
+    where: { customDomain: host },
+    select: { subdomain: true, customDomainEnabled: true },
   });
 
   if (tenant) {
@@ -58,6 +58,7 @@ export async function resolveHost(hostname) {
       type: "tenant",
       subdomain: tenant.subdomain,
       isCustomDomain: true,
+      customDomainActive: tenant.customDomainEnabled !== false,
     };
   }
 

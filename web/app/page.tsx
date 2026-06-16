@@ -12,7 +12,10 @@ import {
   getRequestOrigin,
 } from "@/lib/server-request";
 import { parseHost } from "@/lib/tenant";
-import { resolveHostViaApi, shouldRedirectToCustomDomain } from "@/lib/tenant-host";
+import {
+  resolveHostViaApi,
+  shouldRedirectToCustomDomain,
+} from "@/lib/tenant-host";
 import type { HostContext } from "@/types";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -75,6 +78,15 @@ export default async function Home() {
   let hostCtx = parseHost(host) as HostContext;
   if (hostCtx.type === "unknown") {
     hostCtx = await resolveHostViaApi(host);
+  }
+
+  // Redirect disabled custom domain → subdomain
+  if (
+    hostCtx.type === "tenant" &&
+    hostCtx.isCustomDomain &&
+    hostCtx.customDomainActive === false
+  ) {
+    redirect(`https://${hostCtx.subdomain}.${rootDomain}`);
   }
 
   const profile = await getPublicProfile(host);

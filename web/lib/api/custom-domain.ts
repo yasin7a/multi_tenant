@@ -13,6 +13,16 @@ export async function verifyCustomDomain(domain: string) {
   return (await res.json()) as DomainVerify;
 }
 
+export async function removeCustomDomain(): Promise<boolean> {
+  const res = await fetch(`${getClientApiBase()}/api/custom-domain/remove`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  return data?.removed === true;
+}
+
 export function dnsHostHint(domain: string) {
   if (!domain || !domain.includes(".")) return "@ (or your domain root)";
   const parts = domain.split(".");

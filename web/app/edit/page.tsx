@@ -9,6 +9,7 @@ import { resolveImageSrc } from "@/lib/assets";
 import { inferRootDomainFromHost } from "@/lib/root-domain";
 import { getClientApiBase } from "@/lib/api-origin";
 import { updateProfile } from "@/lib/api/profile-client";
+import { getTenantWebUrl } from "@/lib/tenant";
 import type { Me } from "@/types";
 
 function resolveDisplayRootDomain() {
@@ -44,6 +45,28 @@ export default function EditPage() {
       })
       .then((data: Me) => {
         if (cancelled) return;
+
+        // Redirect to tenant's own domain if on wrong host
+        const currentHost = window.location.hostname;
+        const root = inferRootDomainFromHost(currentHost);
+        const customActive =
+          data.tenant?.customDomain &&
+          data.tenant?.customDomainEnabled !== false;
+
+        if (customActive) {
+          if (currentHost !== data.tenant.customDomain) {
+            window.location.href = `https://${data.tenant.customDomain}/edit`;
+            return;
+          }
+        } else {
+          // No active custom domain — must be on subdomain
+          const subdomainHost = `${data.tenant.subdomain}.${root}`;
+          if (currentHost !== subdomainHost) {
+            window.location.href = `${getTenantWebUrl(data.tenant.subdomain)}/edit`;
+            return;
+          }
+        }
+
         const saved = data.tenant?.customDomain || "";
         setMe(data);
         setUsername(data.username || "");
@@ -150,6 +173,14 @@ export default function EditPage() {
           />
         ) : null}
 
+        <CustomDomainSection
+          customDomain={customDomain}
+          customDomainDisabled={customDomainDisabled}
+          loading={loading}
+          onCustomDomainChange={setCustomDomain}
+          onDisabledChange={setCustomDomainDisabled}
+        />
+
         <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
           <label className={styles.label}>
             Username
@@ -178,14 +209,6 @@ export default function EditPage() {
               disabled={loading}
             />
           </label>
-
-          <CustomDomainSection
-            customDomain={customDomain}
-            customDomainDisabled={customDomainDisabled}
-            loading={loading}
-            onCustomDomainChange={setCustomDomain}
-            onDisabledChange={setCustomDomainDisabled}
-          />
 
           <label className={styles.label}>
             Profile image (optional)

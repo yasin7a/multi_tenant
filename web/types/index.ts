@@ -32,5 +32,10 @@ export type DomainVerify = {
 
 export type HostContext =
   | { type: "main" }
-  | { type: "tenant"; subdomain: string; isCustomDomain: boolean }
+  | {
+      type: "tenant";
+      subdomain: string;
+      isCustomDomain: boolean;
+      customDomainActive?: boolean;
+    }
   | { type: "unknown"; host: string };
