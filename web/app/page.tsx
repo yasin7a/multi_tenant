@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "./page.module.css";
 import { parseHost } from "./lib/tenant";
-import { getApiOrigin, getRequestHost, getRequestOrigin } from "./lib/server-request";
+import { getRequestHost, getRequestOrigin } from "./lib/server-request";
 
 type PublicProfile = {
   username: string;
@@ -12,9 +12,10 @@ type PublicProfile = {
   tenant: { subdomain: string; customDomain: string | null; createdAt: string };
 };
 
-async function getTenantPublicProfile(host: string) {
-  const apiOrigin = getApiOrigin();
-  const res = await fetch(`${apiOrigin}/api/profile/public`, {
+async function getTenantPublicProfile(origin: string, host: string) {
+  // Use the same origin so this works robustly with Caddy + custom domains.
+  // (Next rewrites /api/* to the API server in dev; in prod Caddy routes /api/* to the API.)
+  const res = await fetch(`${origin}/api/profile/public`, {
     headers: { host },
     cache: "no-store",
   });
@@ -28,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const origin = await getRequestOrigin();
 
   if (hostCtx.type === "tenant") {
-    const profile = await getTenantPublicProfile(host);
+    const profile = await getTenantPublicProfile(origin, host);
     if (!profile) {
       return {
         title: "Site not found",
@@ -75,7 +76,8 @@ export default async function Home() {
   const hostCtx = parseHost(host);
 
   if (hostCtx.type === "tenant") {
-    const profile = await getTenantPublicProfile(host);
+    const origin = await getRequestOrigin();
+    const profile = await getTenantPublicProfile(origin, host);
 
     return (
       <div className={styles.page}>

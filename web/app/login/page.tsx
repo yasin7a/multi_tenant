@@ -43,22 +43,36 @@ export default function LoginPage() {
         <h1 className={styles.title}>Login</h1>
         <p className={styles.muted}>Login on your tenant domain/subdomain.</p>
         {error ? <div className={styles.error}>{error}</div> : null}
-        <form className={styles.form} onSubmit={onSubmit}>
+        <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
           <label className={styles.label}>
             Email
-            <input className={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              className={styles.input}
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Password
             <input
               className={styles.input}
+              name="password"
               type="password"
+              autoComplete="current-password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
             />
           </label>
           <div className={styles.actions}>
-            <button className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
               {loading ? "Signing in…" : "Sign in"}
             </button>
             <Link className={styles.link} href="/register">

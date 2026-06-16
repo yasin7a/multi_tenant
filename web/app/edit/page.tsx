@@ -93,25 +93,58 @@ export default function EditPage() {
           <img src={me.imageUrl} alt="Current avatar" style={{ width: 96, height: 96, borderRadius: 999, objectFit: "cover", marginBottom: 12 }} />
         ) : null}
 
-        <form className={styles.form} onSubmit={onSubmit}>
+        <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
           <label className={styles.label}>
             Username
-            <input className={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input
+              className={styles.input}
+              name="username"
+              autoComplete="username"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Email
-            <input className={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              className={styles.input}
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Custom domain (optional)
-            <input className={styles.input} value={customDomain} onChange={(e) => setCustomDomain(e.target.value)} placeholder="mysite.com" />
+            <input
+              className={styles.input}
+              name="customDomain"
+              autoComplete="url"
+              value={customDomain}
+              onChange={(e) => setCustomDomain(e.target.value)}
+              placeholder="mysite.com"
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Profile image (optional)
-            <input className={styles.input} type="file" accept="image/*" onChange={(e) => setImage(e.target.files?.[0] || null)} />
+            <input
+              className={styles.input}
+              name="image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImage(e.target.files?.[0] || null)}
+              disabled={loading}
+            />
           </label>
           <div className={styles.actions}>
-            <button className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
               {loading ? "Saving…" : "Save"}
             </button>
             <Link className={styles.link} href="/">

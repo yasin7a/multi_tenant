@@ -47,26 +47,48 @@ export default function RegisterPage() {
           Your public profile will be available on <b>{username || "username"}</b>.
         </p>
         {error ? <div className={styles.error}>{error}</div> : null}
-        <form className={styles.form} onSubmit={onSubmit}>
+        <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
           <label className={styles.label}>
             Username
-            <input className={styles.input} value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input
+              className={styles.input}
+              name="username"
+              autoComplete="username"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Email
-            <input className={styles.input} value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input
+              className={styles.input}
+              name="email"
+              type="email"
+              autoComplete="email"
+              inputMode="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+            />
           </label>
           <label className={styles.label}>
             Password
             <input
               className={styles.input}
+              name="password"
               type="password"
+              autoComplete="new-password"
+              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
             />
           </label>
           <div className={styles.actions}>
-            <button className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
               {loading ? "Creating…" : "Create account"}
             </button>
             <Link className={styles.link} href="/login">
