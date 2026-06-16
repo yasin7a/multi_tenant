@@ -1,4 +1,7 @@
-import { getServerRootDomain, inferRootDomainFromHost } from "@/lib/root-domain";
+import {
+  getServerRootDomain,
+  inferRootDomainFromHost,
+} from "@/lib/root-domain";
 import type { HostContext } from "@/types";
 
 const DEV_ROOT = "lvh.me";
@@ -46,7 +49,8 @@ export function parseHost(hostname: string): HostContext {
 
 export function getTenantWebUrl(subdomain: string) {
   const port = getWebPort();
-  const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+  const protocol =
+    typeof window !== "undefined" ? window.location.protocol : "http:";
   const root =
     typeof window !== "undefined"
       ? inferRootDomainFromHost(window.location.hostname)
