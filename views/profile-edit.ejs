@@ -1,4 +1,7 @@
 <div class="card">
+  <% const siteBaseUrl = user.tenant.customDomain
+    ? `https://${user.tenant.customDomain}`
+    : `https://${user.tenant.subdomain}.${rootDomain}` %>
   <div class="profile-header">
     <% if (user.imageUrl) { %>
       <img class="avatar avatar-img" src="<%= user.imageUrl %>" alt="<%= user.username %>">
@@ -59,7 +62,7 @@
     </div>
 
     <% if (user.tenant.customDomain) { %>
-      <p class="meta">Your site: <strong><a href="<%= tenantBaseUrl %>"><%= user.tenant.customDomain %></a></strong></p>
+      <p class="meta">Your site: <strong><a href="<%= siteBaseUrl %>"><%= user.tenant.customDomain %></a></strong></p>
       <p class="meta">Also at: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong></p>
     <% } else { %>
       <p class="meta">Your site: <strong><span id="subdomain-preview"><%= user.tenant.subdomain %></span>.<%= rootDomain %></strong> (updates with username)</p>
@@ -165,7 +168,7 @@
     <% if (user.tenant.customDomain) { %>
       <span class="site-link-domain">
         <% if (customDomainVerified) { %><span class="domain-check inline" title="Valid Configuration">✓</span><% } %>
-        <a href="<%= tenantBaseUrl %>"><%= user.tenant.customDomain %></a>
+        <a href="<%= siteBaseUrl %>"><%= user.tenant.customDomain %></a>
       </span>
     <% } else { %>
       <a href="/" id="public-page-link"><%= user.tenant.subdomain %>.<%= rootDomain %></a>

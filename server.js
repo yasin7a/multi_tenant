@@ -487,7 +487,6 @@ async function renderProfileEdit(reply, request, user, { error = null, success =
     rootDomain: ROOT_DOMAIN,
     serverIp: SERVER_IP,
     customDomainVerified,
-    tenantBaseUrl: getTenantBaseUrl(user.tenant),
     error,
     success,
   }, request)
