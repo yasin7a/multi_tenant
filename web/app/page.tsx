@@ -113,6 +113,26 @@ export default async function Home() {
     );
   }
 
+  // Show landing page only on the platform root domain.
+  // Unknown hosts (stale custom domains, random domains) get a "not found" page.
+  if (hostCtx.type === "unknown") {
+    return (
+      <div className={styles.page}>
+        <main className={styles.main}>
+          <div style={{ textAlign: "center", padding: "4rem 1rem" }}>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+              Site not found
+            </h1>
+            <p style={{ color: "#666", marginTop: "0.5rem" }}>
+              There is no site configured at <code>{hostCtx.host || host}</code>
+              .
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const landingRootDomain = host === "localhost" ? rootDomain : host;
 
   return (
