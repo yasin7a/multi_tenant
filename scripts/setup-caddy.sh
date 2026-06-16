@@ -8,10 +8,13 @@ ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$API_DIR/.env" 2>/dev/nul
 ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-multi.takitahmid.com}"
 
-APP_PORT="${APP_PORT:-$(grep -E '^API_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-APP_PORT="${APP_PORT:-9097}"
+API_PORT="${API_PORT:-$(grep -E '^API_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+API_PORT="${API_PORT:-$(grep -E '^PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+API_PORT="${API_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+API_PORT="${API_PORT:-9097}"
+
+WEB_PORT="${WEB_PORT:-$(grep -E '^WEB_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+WEB_PORT="${WEB_PORT:-3000}"
 LE_CERT="/etc/letsencrypt/live/${ROOT_DOMAIN}/fullchain.pem"
 CADDY_CERT_DIR="/etc/caddy/certs"
 
@@ -68,11 +71,11 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active
   ufw allow 443/tcp
 fi
 
-if ! curl -sf --max-time 2 "http://127.0.0.1:${APP_PORT}/" >/dev/null; then
-  echo "WARNING: App is not responding on :${APP_PORT}. Start it first: pm2 restart multi-tenant"
+if ! curl -sf --max-time 2 "http://127.0.0.1:${API_PORT}/api/health" >/dev/null; then
+  echo "WARNING: API is not responding on :${API_PORT}. Start it first (apps/api)."
 fi
 
-sed -e "s/__ROOT_DOMAIN__/${ROOT_DOMAIN}/g" -e "s/__APP_PORT__/${APP_PORT}/g" "$DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
+sed -e "s/__ROOT_DOMAIN__/${ROOT_DOMAIN}/g" -e "s/__API_PORT__/${API_PORT}/g" -e "s/__WEB_PORT__/${WEB_PORT}/g" "$DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile
 
 systemctl enable caddy
@@ -91,4 +94,4 @@ if ! ss -tln | grep -q ':443'; then
   exit 1
 fi
 
-echo "OK: https://${ROOT_DOMAIN} (ports 80 and 443 open, proxying to :${APP_PORT})"
+echo "OK: https://${ROOT_DOMAIN} (web->:${WEB_PORT}, api->:${API_PORT})"

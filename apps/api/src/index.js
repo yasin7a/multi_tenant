@@ -268,14 +268,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(
-  "/uploads",
+  "/api/uploads",
   express.static(path.join(__dirname, "..", "public", "uploads")),
 );
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Caddy on_demand_tls calls this before issuing a certificate (custom domains only).
-app.get("/internal/caddy-ask", async (req, res) => {
+app.get("/api/internal/caddy-ask", async (req, res) => {
   const domain = normalizeCustomDomain(req.query.domain);
   if (!domain || !isValidCustomDomain(domain)) return res.status(403).send();
   if (domain === ROOT_DOMAIN || domain.endsWith(`.${ROOT_DOMAIN}`))
@@ -289,7 +289,7 @@ app.get("/internal/caddy-ask", async (req, res) => {
   return tenant ? res.status(200).send("ok") : res.status(403).send();
 });
 
-app.get("/auth/continue", async (req, res) => {
+app.get("/api/auth/continue", async (req, res) => {
   const userId = consumeAuthHandoff(req.query.token);
   const nextPath =
     typeof req.query.next === "string" && req.query.next.startsWith("/")
@@ -432,7 +432,7 @@ app.post("/api/auth/login", async (req, res) => {
     return res.json({
       isLoggedIn: true,
       userId: user.id,
-      redirectUrl: `${getTenantBaseUrl(user.tenant)}/auth/continue?token=${token}&next=${encodeURIComponent("/edit")}`,
+      redirectUrl: `${getTenantBaseUrl(user.tenant)}/api/auth/continue?token=${token}&next=${encodeURIComponent("/edit")}`,
     });
   }
 
@@ -445,7 +445,7 @@ app.post("/api/auth/logout", async (req, res) => {
 });
 
 async function deleteProfileImage(imageUrl) {
-  if (!imageUrl?.startsWith("/uploads/")) return;
+  if (!imageUrl?.startsWith("/api/uploads/")) return;
   const filename = path.basename(imageUrl);
   if (!filename || filename.includes("..")) return;
   const filepath = path.resolve(UPLOADS_DIR, filename);
@@ -517,7 +517,7 @@ app.post("/api/profile", upload.single("image"), async (req, res) => {
 
   const previousImageUrl = authUser.imageUrl;
   const uploadedImageUrl = req.file?.filename
-    ? `/uploads/${req.file.filename}`
+    ? `/api/uploads/${req.file.filename}`
     : null;
   const imageUrl = uploadedImageUrl ?? authUser.imageUrl;
 
@@ -570,7 +570,7 @@ app.post("/api/profile", upload.single("image"), async (req, res) => {
     const token = createAuthHandoff(updatedUser.id);
     return res.json({
       ...updatedUser,
-      redirectUrl: `${getTenantBaseUrl(updatedUser.tenant)}/auth/continue?token=${token}&next=${encodeURIComponent("/edit")}`,
+      redirectUrl: `${getTenantBaseUrl(updatedUser.tenant)}/api/auth/continue?token=${token}&next=${encodeURIComponent("/edit")}`,
     });
   }
 
