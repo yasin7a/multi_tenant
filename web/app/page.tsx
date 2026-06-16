@@ -3,7 +3,6 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import { parseHost } from "./lib/tenant";
 import { getRequestCookieHeader, getRequestHost, getRequestOrigin } from "./lib/server-request";
-import LogoutButton from "./components/LogoutButton";
 
 type PublicProfile = {
   username: string;
@@ -163,20 +162,6 @@ export default async function Home() {
                   <span className={styles.infoLabel}>Site created</span>
                   <span>{formatDate(profile.tenant.createdAt)}</span>
                 </div>
-              </div>
-              <div className={styles.row}>
-                {me?.tenant?.subdomain === profile.tenant.subdomain ? (
-                  <>
-                    <Link className={styles.link} href="/edit">
-                      Edit profile
-                    </Link>
-                    <LogoutButton className={styles.link}>Logout</LogoutButton>
-                  </>
-                ) : (
-                  <Link className={styles.link} href="/login">
-                    Sign in
-                  </Link>
-                )}
               </div>
             </div>
           )}

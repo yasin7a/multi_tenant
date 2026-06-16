@@ -8,11 +8,15 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [redirectSeconds, setRedirectSeconds] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setRedirectUrl(null);
+    setRedirectSeconds(0);
     setLoading(true);
     try {
       const r = await fetch("/api/auth/login", {
@@ -22,7 +26,23 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.message || data?.error || "Login failed");
+      if (!r.ok) {
+        // Wrong tenant: show warning and redirect after 5s (old behavior)
+        if (r.status === 403 && data?.redirectUrl) {
+          setError(data?.message || "This site belongs to someone else. Redirecting you…");
+          setRedirectUrl(String(data.redirectUrl));
+          setRedirectSeconds(5);
+          for (let i = 4; i >= 0; i -= 1) {
+            window.setTimeout(() => setRedirectSeconds(i), (5 - i) * 1000);
+          }
+          window.setTimeout(() => {
+            window.location.href = String(data.redirectUrl);
+          }, 5000);
+          return;
+        }
+
+        throw new Error(data?.message || data?.error || "Login failed");
+      }
 
       if (data?.redirectUrl) {
         window.location.href = data.redirectUrl;
@@ -42,7 +62,19 @@ export default function LoginPage() {
       <div className={styles.card}>
         <h1 className={styles.title}>Login</h1>
         <p className={styles.muted}>Login on your tenant domain/subdomain.</p>
-        {error ? <div className={styles.error}>{error}</div> : null}
+        {error ? (
+          <div className={styles.error}>
+            {error}
+            {redirectUrl ? (
+              <div style={{ marginTop: 8 }}>
+                Redirecting in <b>{redirectSeconds}</b>s —{" "}
+                <a className={styles.link} href={redirectUrl}>
+                  go now
+                </a>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
           <label className={styles.label}>
             Email

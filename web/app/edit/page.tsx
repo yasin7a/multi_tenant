@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../auth.module.css";
-import LogoutButton from "../components/LogoutButton";
 
 type Me = {
   id: string;
@@ -251,7 +250,6 @@ export default function EditPage() {
             <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
               {loading ? "Saving…" : "Save"}
             </button>
-            <LogoutButton className={styles.link}>Logout</LogoutButton>
           </div>
         </form>
       </div>
