@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon --watch src --exec node src/index.js",
-    "p:gen": "npx prisma generate --schema prisma/schema.prisma",
-    "p:migrate": "npx prisma migrate dev --schema prisma/schema.prisma",
-    "p:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
+    "p:gen": "npx prisma generate",
+    "p:migrate": "npx prisma migrate dev",
+    "p:deploy": "npx prisma migrate deploy",
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
