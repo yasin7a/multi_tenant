@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getClientApiBase } from "@/lib/api-origin";
 
 type Props = {
   className?: string;
@@ -19,7 +20,7 @@ export default function LogoutButton({
     if (loading) return;
     setLoading(true);
     try {
-      await fetch("/api/auth/logout", {
+      await fetch(`${getClientApiBase()}/api/auth/logout`, {
         method: "POST",
         credentials: "include",
       });
@@ -29,7 +30,12 @@ export default function LogoutButton({
   }
 
   return (
-    <button type="button" className={className} onClick={onClick} disabled={loading}>
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      disabled={loading}
+    >
       {loading ? "Logging out…" : children}
     </button>
   );

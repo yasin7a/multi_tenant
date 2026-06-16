@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import styles from "../auth.module.css";
+import { getClientApiBase } from "@/lib/api-origin";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,7 +20,7 @@ export default function LoginPage() {
     setRedirectSeconds(0);
     setLoading(true);
     try {
-      const r = await fetch("/api/auth/login", {
+      const r = await fetch(`${getClientApiBase()}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -29,7 +30,10 @@ export default function LoginPage() {
       if (!r.ok) {
         // Wrong tenant: show warning and redirect after 5s (old behavior)
         if (r.status === 403 && data?.redirectUrl) {
-          setError(data?.message || "This site belongs to someone else. Redirecting you…");
+          setError(
+            data?.message ||
+              "This site belongs to someone else. Redirecting you…",
+          );
           setRedirectUrl(String(data.redirectUrl));
           setRedirectSeconds(5);
           for (let i = 4; i >= 0; i -= 1) {
@@ -104,7 +108,11 @@ export default function LoginPage() {
             />
           </label>
           <div className={styles.actions}>
-            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button
+              type="submit"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              disabled={loading}
+            >
               {loading ? "Signing in…" : "Sign in"}
             </button>
             <Link className={styles.link} href="/register">
@@ -116,4 +124,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

@@ -7,6 +7,7 @@ import CustomDomainSection from "@/components/edit/CustomDomainSection";
 import EditPageSkeleton from "@/components/edit/EditPageSkeleton";
 import { resolveImageSrc } from "@/lib/assets";
 import { inferRootDomainFromHost } from "@/lib/root-domain";
+import { getClientApiBase } from "@/lib/api-origin";
 import { updateProfile } from "@/lib/api/profile-client";
 import type { Me } from "@/types";
 
@@ -35,9 +36,10 @@ export default function EditPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/profile/me", { credentials: "include" })
+    fetch(`${getClientApiBase()}/api/profile/me`, { credentials: "include" })
       .then(async (r) => {
-        if (!r.ok) throw new Error((await r.json())?.error || "not authenticated");
+        if (!r.ok)
+          throw new Error((await r.json())?.error || "not authenticated");
         return r.json();
       })
       .then((data: Me) => {
@@ -55,7 +57,10 @@ export default function EditPage() {
         if (cancelled) return;
         setInitialLoading(false);
         try {
-          await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+          await fetch(`${getClientApiBase()}/api/auth/logout`, {
+            method: "POST",
+            credentials: "include",
+          });
         } catch {
           // ignore
         }
@@ -108,7 +113,8 @@ export default function EditPage() {
       <div className={styles.card}>
         <h1 className={styles.title}>Edit profile</h1>
         <p className={styles.muted}>
-          Update your public profile. If you set a custom domain, you may need DNS.
+          Update your public profile. If you set a custom domain, you may need
+          DNS.
         </p>
         {error ? <div className={styles.error}>{error}</div> : null}
         {success ? <div className={styles.success}>{success}</div> : null}

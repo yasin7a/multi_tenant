@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { getServerRootDomain } from "@/lib/root-domain";
+import { getApiOrigin } from "@/lib/api-origin";
 
 function isLoggedIn(request: NextRequest) {
   // API sets this cookie (httpOnly). Proxy can still read it for redirects.
@@ -8,18 +9,17 @@ function isLoggedIn(request: NextRequest) {
 }
 
 async function getCustomDomainIfAny(request: NextRequest) {
-  const hostHeader = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
+  const hostHeader =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "";
   const host = hostHeader.split(",")[0].trim().replace(/:\d+$/, "");
   const root = getServerRootDomain();
 
   // Only canonicalize platform subdomains (custom domains are already canonical).
   if (!host.endsWith(`.${root}`)) return null;
 
-  const apiOrigin =
-    process.env.NODE_ENV === "production"
-      ? process.env.API_ORIGIN || "http://127.0.0.1:9097"
-      : process.env.API_ORIGIN || "http://localhost:9097";
-  const res = await fetch(`${apiOrigin}/api/profile/public`, {
+  const res = await fetch(`${getApiOrigin()}/api/profile/public`, {
     headers: {
       "x-forwarded-host": host,
       accept: "application/json",
@@ -32,7 +32,8 @@ async function getCustomDomainIfAny(request: NextRequest) {
     tenant?: { customDomain?: string | null; customDomainEnabled?: boolean };
   };
   const tenant = data?.tenant;
-  if (!tenant?.customDomain || tenant.customDomainEnabled === false) return null;
+  if (!tenant?.customDomain || tenant.customDomainEnabled === false)
+    return null;
   const custom = String(tenant.customDomain);
   if (custom === host) return null;
   return custom;
@@ -89,4 +90,3 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/:path*"],
 };
-

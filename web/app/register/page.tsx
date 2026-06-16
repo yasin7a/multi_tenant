@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import styles from "../auth.module.css";
 import { getTenantWebUrl } from "@/lib/tenant";
+import { getClientApiBase } from "@/lib/api-origin";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
@@ -17,7 +18,7 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const r = await fetch("/api/auth/register", {
+      const r = await fetch(`${getClientApiBase()}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -44,7 +45,8 @@ export default function RegisterPage() {
       <div className={styles.card}>
         <h1 className={styles.title}>Register</h1>
         <p className={styles.muted}>
-          Your public profile will be available on <b>{username || "username"}</b>.
+          Your public profile will be available on{" "}
+          <b>{username || "username"}</b>.
         </p>
         {error ? <div className={styles.error}>{error}</div> : null}
         <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
@@ -88,7 +90,11 @@ export default function RegisterPage() {
             />
           </label>
           <div className={styles.actions}>
-            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button
+              type="submit"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              disabled={loading}
+            >
               {loading ? "Creating…" : "Create account"}
             </button>
             <Link className={styles.link} href="/login">
@@ -100,4 +106,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

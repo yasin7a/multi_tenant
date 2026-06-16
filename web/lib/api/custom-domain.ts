@@ -1,10 +1,14 @@
+import { getClientApiBase } from "@/lib/api-origin";
 import type { DomainVerify } from "@/types";
 
 export async function verifyCustomDomain(domain: string) {
-  const res = await fetch(`/api/custom-domain/verify?domain=${encodeURIComponent(domain)}`, {
-    headers: { accept: "application/json" },
-    credentials: "include",
-  });
+  const res = await fetch(
+    `${getClientApiBase()}/api/custom-domain/verify?domain=${encodeURIComponent(domain)}`,
+    {
+      headers: { accept: "application/json" },
+      credentials: "include",
+    },
+  );
   if (!res.ok) return null;
   return (await res.json()) as DomainVerify;
 }

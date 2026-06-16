@@ -26,8 +26,12 @@ export default function CustomDomainSection({
   const [verifying, setVerifying] = useState(false);
   const verifyTimer = useRef<number | null>(null);
 
+  // Ref so runVerify stays stable across keystrokes — avoids effect churn
+  const customDomainRef = useRef(customDomain);
+  customDomainRef.current = customDomain;
+
   const runVerify = useCallback(async (domain?: string) => {
-    const value = (domain ?? customDomain).trim().toLowerCase();
+    const value = (domain ?? customDomainRef.current).trim().toLowerCase();
     if (!value) {
       setDomainStatus(null);
       return;
@@ -39,7 +43,7 @@ export default function CustomDomainSection({
     } finally {
       setVerifying(false);
     }
-  }, [customDomain]);
+  }, []); // stable — reads latest via ref
 
   function scheduleVerify(nextValue: string) {
     if (verifyTimer.current) window.clearTimeout(verifyTimer.current);
@@ -49,12 +53,15 @@ export default function CustomDomainSection({
   useEffect(() => {
     if (!customDomain.trim() || customDomainDisabled) return;
     const immediate = window.setTimeout(() => void runVerify(customDomain), 0);
-    const t = window.setInterval(() => void runVerify(customDomain), VERIFY_INTERVAL_MS);
+    const t = window.setInterval(
+      () => void runVerify(customDomain),
+      VERIFY_INTERVAL_MS,
+    );
     return () => {
       window.clearTimeout(immediate);
       window.clearInterval(t);
     };
-  }, [customDomain, customDomainDisabled, runVerify]);
+  }, [customDomain, customDomainDisabled]); // runVerify stable — no longer a dep
 
   return (
     <>
@@ -78,7 +85,12 @@ export default function CustomDomainSection({
         <div className={styles.panel}>
           <label
             className={styles.label}
-            style={{ flexDirection: "row", alignItems: "center", gap: 8, margin: 0 }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              margin: 0,
+            }}
           >
             <input
               type="checkbox"
@@ -124,7 +136,8 @@ export default function CustomDomainSection({
               <>
                 <br />
                 <span className={styles.mono}>
-                  A {dnsHostHint(domainStatus.domain)} → {domainStatus.expectedIp}
+                  A {dnsHostHint(domainStatus.domain)} →{" "}
+                  {domainStatus.expectedIp}
                 </span>
               </>
             ) : null}
