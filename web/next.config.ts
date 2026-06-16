@@ -4,7 +4,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  allowedDevOrigins: ["lvh.me", "*.lvh.me", "localhost"],
+  allowedDevOrigins: [
+    "localhost",
+    "lvh.me",
+    "*.lvh.me",
+    "multi.takitahmid.com",
+    "*.multi.takitahmid.com",
+  ],
   async rewrites() {
     const apiOrigin = process.env.API_ORIGIN || "http://localhost:9097";
     return [
