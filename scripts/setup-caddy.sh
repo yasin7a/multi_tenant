@@ -2,7 +2,7 @@
 set -e
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-API_DIR="$DIR/apps/api"
+API_DIR="$DIR/api"
 
 ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
