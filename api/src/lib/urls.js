@@ -1,5 +1,7 @@
 import { PUBLIC_URL, ROOT_DOMAIN, WEB_PORT } from "../config.js";
 
+const isProd = process.env.NODE_ENV === "production";
+
 export function getPublicProtocol() {
   if (PUBLIC_URL?.startsWith("https")) return "https";
   if (PUBLIC_URL?.startsWith("http")) return "http";
@@ -8,7 +10,9 @@ export function getPublicProtocol() {
 
 export function getSiteUrl(subdomain) {
   if (PUBLIC_URL) return `${getPublicProtocol()}://${subdomain}.${ROOT_DOMAIN}`;
-  return `http://${subdomain}.${ROOT_DOMAIN}:${WEB_PORT}`;
+  // Dev fallback only
+  if (!isProd) return `http://${subdomain}.${ROOT_DOMAIN}:${WEB_PORT}`;
+  return `https://${subdomain}.${ROOT_DOMAIN}`;
 }
 
 export function isCustomDomainActive(tenant) {

@@ -52,6 +52,9 @@ export function getTenantWebUrl(subdomain: string) {
       ? inferRootDomainFromHost(window.location.hostname)
       : getRootDomain();
   const host = `${subdomain}.${root}`;
-  const isDev = port && port !== "80" && port !== "443";
-  return `${protocol}//${host}${isDev ? `:${port}` : ""}`;
+  // Only add port in dev (lvh.me)
+  if (root === DEV_ROOT) {
+    return `${protocol}//${host}:${port}`;
+  }
+  return `${protocol}//${host}`;
 }
