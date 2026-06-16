@@ -4,16 +4,25 @@ set -e
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 API_DIR="$DIR/api"
 
-ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+read_env() {
+  # read_env <file> <KEY>
+  # Strips surrounding single/double quotes safely.
+  local file="$1"
+  local key="$2"
+  [ -f "$file" ] || return 1
+  sed -nE "s/^${key}=(.*)$/\\1/p" "$file" | head -n 1 | sed -E "s/^['\\\"]?(.*?)['\\\"]?$/\\1/"
+}
+
+ROOT_DOMAIN="${ROOT_DOMAIN:-$(read_env "$API_DIR/.env" ROOT_DOMAIN 2>/dev/null || true)}"
+ROOT_DOMAIN="${ROOT_DOMAIN:-$(read_env "$DIR/.env" ROOT_DOMAIN 2>/dev/null || true)}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-multi.takitahmid.com}"
 
-API_PORT="${API_PORT:-$(grep -E '^API_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-API_PORT="${API_PORT:-$(grep -E '^PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
-API_PORT="${API_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+API_PORT="${API_PORT:-$(read_env "$API_DIR/.env" API_PORT 2>/dev/null || true)}"
+API_PORT="${API_PORT:-$(read_env "$API_DIR/.env" PORT 2>/dev/null || true)}"
+API_PORT="${API_PORT:-$(read_env "$DIR/.env" PORT 2>/dev/null || true)}"
 API_PORT="${API_PORT:-9097}"
 
-WEB_PORT="${WEB_PORT:-$(grep -E '^WEB_PORT=' "$API_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '\"' | tr -d \"'\")}"
+WEB_PORT="${WEB_PORT:-$(read_env "$API_DIR/.env" WEB_PORT 2>/dev/null || true)}"
 WEB_PORT="${WEB_PORT:-3000}"
 LE_CERT="/etc/letsencrypt/live/${ROOT_DOMAIN}/fullchain.pem"
 CADDY_CERT_DIR="/etc/caddy/certs"
@@ -72,7 +81,7 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active
 fi
 
 if ! curl -sf --max-time 2 "http://127.0.0.1:${API_PORT}/api/health" >/dev/null; then
-  echo "WARNING: API is not responding on :${API_PORT}. Start it first (apps/api)."
+  echo "WARNING: API is not responding on :${API_PORT}. Start it first (api)."
 fi
 
 sed -e "s/__ROOT_DOMAIN__/${ROOT_DOMAIN}/g" -e "s/__API_PORT__/${API_PORT}/g" -e "s/__WEB_PORT__/${WEB_PORT}/g" "$DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
