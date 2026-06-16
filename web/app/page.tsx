@@ -4,6 +4,11 @@ import styles from "./page.module.css";
 import { parseHost } from "./lib/tenant";
 import { getRequestCookieHeader, getRequestHost, getRequestOrigin } from "./lib/server-request";
 
+type HostCtx =
+  | { type: "main" }
+  | { type: "tenant"; subdomain: string; isCustomDomain: boolean }
+  | { type: "unknown"; host: string };
+
 type PublicProfile = {
   username: string;
   email: string;
@@ -39,6 +44,15 @@ async function getTenantPublicProfile(origin: string, host: string) {
   return (await res.json()) as PublicProfile;
 }
 
+async function resolveHostViaApi(origin: string, host: string): Promise<HostCtx> {
+  const res = await fetch(`${origin}/api/site`, {
+    headers: { host, accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) return { type: "unknown", host };
+  return (await res.json()) as HostCtx;
+}
+
 async function getMe(origin: string, host: string) {
   const cookie = await getRequestCookieHeader();
   if (!cookie) return null;
@@ -52,8 +66,11 @@ async function getMe(origin: string, host: string) {
 
 export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost();
-  const hostCtx = parseHost(host);
   const origin = await getRequestOrigin();
+  let hostCtx = parseHost(host) as HostCtx;
+  if (hostCtx.type === "unknown") {
+    hostCtx = await resolveHostViaApi(origin, host);
+  }
 
   if (hostCtx.type === "tenant") {
     const profile = await getTenantPublicProfile(origin, host);
@@ -100,10 +117,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function Home() {
   const host = await getRequestHost();
-  const hostCtx = parseHost(host);
+  const origin = await getRequestOrigin();
+  let hostCtx = parseHost(host) as HostCtx;
+  if (hostCtx.type === "unknown") {
+    hostCtx = await resolveHostViaApi(origin, host);
+  }
 
   if (hostCtx.type === "tenant") {
-    const origin = await getRequestOrigin();
     const [profile, me] = await Promise.all([
       getTenantPublicProfile(origin, host),
       getMe(origin, host),
@@ -170,6 +190,11 @@ export default async function Home() {
     );
   }
 
+  const rootDomain =
+    host === "localhost"
+      ? process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"
+      : host;
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -177,7 +202,7 @@ export default async function Home() {
           <h1>Multi Tenant App</h1>
           <p className={styles.muted}>
             Create your own profile site on a subdomain. Your public profile lives at{" "}
-            <code>username.{process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"}</code>.
+            <code>username.{rootDomain}</code>.
           </p>
           <div className={styles.row}>
             <Link className={styles.link} href="/register">
