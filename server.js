@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createWriteStream } from 'node:fs'
@@ -23,7 +24,7 @@ const ALLOWED_IMAGE_TYPES = {
   'image/webp': '.webp',
 }
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
-const PORT = process.env.PORT || 9097
+const PORT = Number(process.env.PORT) || 9097
 const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, '')
 const SERVER_IP = process.env.SERVER_IP || ''
 const authHandoffs = new Map()

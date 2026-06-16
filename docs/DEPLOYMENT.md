@@ -16,7 +16,7 @@ ROOT_DOMAIN=multi.takitahmid.com
 PUBLIC_URL=https://multi.takitahmid.com
 SERVER_IP=<server public IP>
 DATABASE_URL=postgresql://...
-PORT=3000
+PORT=9097
 ```
 
 ## App

@@ -8,7 +8,7 @@ git pull && npm install && npx prisma migrate deploy
 pm2 restart multi-tenant
 ```
 
-**Caddy** (app on :3000; wildcard cert should already be on the server):
+**Caddy** (app on :9097; wildcard cert should already be on the server):
 
 ```bash
 pm2 restart multi-tenant

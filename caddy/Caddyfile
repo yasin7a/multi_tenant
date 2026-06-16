@@ -2,7 +2,7 @@
 	email takitahmid20@gmail.com
 
 	on_demand_tls {
-		ask http://127.0.0.1:3000/internal/caddy-ask
+		ask http://127.0.0.1:__APP_PORT__/internal/caddy-ask
 	}
 }
 
@@ -11,7 +11,7 @@
 		max_size 6MB
 	}
 
-	reverse_proxy 127.0.0.1:3000
+	reverse_proxy 127.0.0.1:__APP_PORT__
 }
 
 :80 {

@@ -4,6 +4,8 @@ set -e
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT_DOMAIN="${ROOT_DOMAIN:-$(grep -E '^ROOT_DOMAIN=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")}"
 ROOT_DOMAIN="${ROOT_DOMAIN:-multi.takitahmid.com}"
+APP_PORT="${APP_PORT:-$(grep -E '^PORT=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")}"
+APP_PORT="${APP_PORT:-9097}"
 LE_CERT="/etc/letsencrypt/live/${ROOT_DOMAIN}/fullchain.pem"
 CADDY_CERT_DIR="/etc/caddy/certs"
 
@@ -60,11 +62,11 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q 'Status: active
   ufw allow 443/tcp
 fi
 
-if ! curl -sf --max-time 2 "http://127.0.0.1:3000/" >/dev/null; then
-  echo "WARNING: App is not responding on :3000. Start it first: pm2 restart multi-tenant"
+if ! curl -sf --max-time 2 "http://127.0.0.1:${APP_PORT}/" >/dev/null; then
+  echo "WARNING: App is not responding on :${APP_PORT}. Start it first: pm2 restart multi-tenant"
 fi
 
-sed "s/__ROOT_DOMAIN__/${ROOT_DOMAIN}/g" "$DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
+sed -e "s/__ROOT_DOMAIN__/${ROOT_DOMAIN}/g" -e "s/__APP_PORT__/${APP_PORT}/g" "$DIR/caddy/Caddyfile" > /etc/caddy/Caddyfile
 caddy validate --config /etc/caddy/Caddyfile
 
 systemctl enable caddy
@@ -83,4 +85,4 @@ if ! ss -tln | grep -q ':443'; then
   exit 1
 fi
 
-echo "OK: https://${ROOT_DOMAIN} (ports 80 and 443 open, proxying to :3000)"
+echo "OK: https://${ROOT_DOMAIN} (ports 80 and 443 open, proxying to :${APP_PORT})"
