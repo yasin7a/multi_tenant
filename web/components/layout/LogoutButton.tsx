@@ -8,7 +8,11 @@ type Props = {
   redirectTo?: string;
 };
 
-export default function LogoutButton({ className, children = "Logout", redirectTo = "/login" }: Props) {
+export default function LogoutButton({
+  className,
+  children = "Logout",
+  redirectTo = "/login",
+}: Props) {
   const [loading, setLoading] = useState(false);
 
   async function onClick() {
@@ -30,4 +34,3 @@ export default function LogoutButton({ className, children = "Logout", redirectT
     </button>
   );
 }
-

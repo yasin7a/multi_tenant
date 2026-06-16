@@ -14,9 +14,7 @@ export async function getRequestHostHeader() {
 }
 
 export async function getRequestHost() {
-  const h = await headers();
-  const host = normalizeForwardedHeader(h.get("x-forwarded-host")) || normalizeForwardedHeader(h.get("host")) || "localhost";
-  // Strip port for hostname parsing (e.g. "tenant.lvh.me:3000" -> "tenant.lvh.me")
+  const host = await getRequestHostHeader();
   return host.replace(/:\d+$/, "");
 }
 
@@ -27,9 +25,18 @@ export async function getRequestProtocol() {
 }
 
 export async function getRequestOrigin() {
-  // IMPORTANT: keep port (e.g. :3000) for dev so same-origin /api rewrites work.
   const [proto, hostHeader] = await Promise.all([getRequestProtocol(), getRequestHostHeader()]);
   return `${proto}://${hostHeader}`;
+}
+
+export async function getServerFetchOrigin() {
+  if (process.env.NODE_ENV !== "production") {
+    const hostHeader = await getRequestHostHeader();
+    const portMatch = hostHeader.match(/:(\d+)$/);
+    const port = portMatch?.[1] || "3000";
+    return `http://127.0.0.1:${port}`;
+  }
+  return getRequestOrigin();
 }
 
 export async function getRequestCookieHeader() {
@@ -40,4 +47,3 @@ export async function getRequestCookieHeader() {
 export function getApiOrigin() {
   return process.env.API_ORIGIN || "http://localhost:9097";
 }
-

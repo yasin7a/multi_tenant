@@ -1,10 +1,8 @@
-export type HostContext =
-  | { type: "main" }
-  | { type: "tenant"; subdomain: string; isCustomDomain: boolean }
-  | { type: "unknown"; host: string };
+import { getServerRootDomain } from "@/lib/root-domain";
+import type { HostContext } from "@/types";
 
-export function getRootDomain(): string {
-  return process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me";
+export function getRootDomain() {
+  return getServerRootDomain();
 }
 
 export function getWebPort(): string {
@@ -40,9 +38,6 @@ export function getTenantWebUrl(subdomain: string) {
   const port = getWebPort();
   const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
   const host = `${subdomain}.${root}`;
-
-  // In production you typically run without an explicit port.
   const isDev = port && port !== "80" && port !== "443";
   return `${protocol}//${host}${isDev ? `:${port}` : ""}`;
 }
-

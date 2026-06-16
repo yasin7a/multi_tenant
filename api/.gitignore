@@ -4,6 +4,9 @@ node_modules/
 generated/
 public/uploads/*
 !public/uploads/.gitkeep
+.env
+.env.*
+!.env.example
 
 npm-debug.log*
 yarn-debug.log*

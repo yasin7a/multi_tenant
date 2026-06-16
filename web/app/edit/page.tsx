@@ -1,24 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import styles from "../auth.module.css";
-
-type Me = {
-  id: string;
-  username: string;
-  email: string;
-  imageUrl: string | null;
-  tenant: { subdomain: string; customDomain: string | null };
-};
-
-type DomainVerify = {
-  domain: string | null;
-  verified: boolean;
-  expectedIp: string | null;
-  addresses: string[];
-  status: "none" | "valid" | "pending";
-};
+import styles from "@/app/auth.module.css";
+import CustomDomainSection from "@/components/edit/CustomDomainSection";
+import { updateProfile } from "@/lib/api/profile";
+import type { Me } from "@/types";
 
 export default function EditPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -29,45 +16,11 @@ export default function EditPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [customDomain, setCustomDomain] = useState("");
+  const [savedCustomDomain, setSavedCustomDomain] = useState("");
+  const [editingCustomDomain, setEditingCustomDomain] = useState(false);
+  const [customDomainDisabled, setCustomDomainDisabled] = useState(false);
   const [image, setImage] = useState<File | null>(null);
-
-  const [domainStatus, setDomainStatus] = useState<DomainVerify | null>(null);
-  const verifyTimer = useRef<number | null>(null);
-
-  const rootDomain = useMemo(
-    () => process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me",
-    [],
-  );
-
-  function dnsHostHint(domain: string) {
-    if (!domain || !domain.includes(".")) return "@ (or your domain root)";
-    const parts = domain.split(".");
-    if (parts.length <= 2) return "@ (or your domain root)";
-    return `${parts[0]} (subdomain)`;
-  }
-
-  const verifyDomain = useCallback(async (domain?: string) => {
-    const value = (domain ?? customDomain).trim().toLowerCase();
-    if (!value) {
-      setDomainStatus(null);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/custom-domain/verify?domain=${encodeURIComponent(value)}`, {
-        headers: { accept: "application/json" },
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      setDomainStatus((await res.json()) as DomainVerify);
-    } catch {
-      // ignore
-    }
-  }, [customDomain]);
-
-  function scheduleVerify(nextValue: string) {
-    if (verifyTimer.current) window.clearTimeout(verifyTimer.current);
-    verifyTimer.current = window.setTimeout(() => verifyDomain(nextValue), 400);
-  }
+  const [rootDomain, setRootDomain] = useState("lvh.me");
 
   useEffect(() => {
     let cancelled = false;
@@ -76,13 +29,17 @@ export default function EditPage() {
         if (!r.ok) throw new Error((await r.json())?.error || "not authenticated");
         return r.json();
       })
-      .then((data) => {
+      .then((data: Me) => {
         if (cancelled) return;
+        const saved = data.tenant?.customDomain || "";
         setMe(data);
         setUsername(data.username || "");
         setEmail(data.email || "");
-        setCustomDomain(data.tenant?.customDomain || "");
-        if (data.tenant?.customDomain) verifyDomain(data.tenant.customDomain);
+        setCustomDomain(saved);
+        setSavedCustomDomain(saved);
+        setEditingCustomDomain(!saved);
+        setCustomDomainDisabled(data.tenant?.customDomainEnabled === false);
+        if (data.rootDomain) setRootDomain(data.rootDomain);
       })
       .catch(() => {
         if (!cancelled) window.location.href = "/login";
@@ -90,13 +47,14 @@ export default function EditPage() {
     return () => {
       cancelled = true;
     };
-  }, [verifyDomain]);
+  }, []);
 
-  useEffect(() => {
-    if (!customDomain.trim()) return;
-    const t = window.setInterval(() => verifyDomain(customDomain), 15000);
-    return () => window.clearInterval(t);
-  }, [customDomain, verifyDomain]);
+  function removeCustomDomain() {
+    setCustomDomain("");
+    setEditingCustomDomain(true);
+    setError(null);
+    setSuccess("Domain cleared. Click Save to apply.");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -108,25 +66,23 @@ export default function EditPage() {
       form.set("username", username);
       form.set("email", email);
       form.set("customDomain", customDomain);
+      form.set("customDomainEnabled", customDomainDisabled ? "false" : "true");
       if (image) form.set("image", image);
 
-      const r = await fetch("/api/profile", {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Update failed");
+      const data = await updateProfile(form);
 
       if (data?.redirectUrl) {
         window.location.href = data.redirectUrl;
         return;
       }
 
+      const saved = data.tenant?.customDomain || "";
       setMe(data);
+      setSavedCustomDomain(saved);
+      setCustomDomain(saved);
+      setEditingCustomDomain(!saved);
       setSuccess("Profile updated.");
       setImage(null);
-      if (customDomain.trim()) verifyDomain(customDomain);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -138,7 +94,9 @@ export default function EditPage() {
     <div className={styles.page}>
       <div className={styles.card}>
         <h1 className={styles.title}>Edit profile</h1>
-        <p className={styles.muted}>Update your public profile. If you set a custom domain, you may need DNS.</p>
+        <p className={styles.muted}>
+          Update your public profile. If you set a custom domain, you may need DNS.
+        </p>
         {error ? <div className={styles.error}>{error}</div> : null}
         {success ? <div className={styles.success}>{success}</div> : null}
 
@@ -160,7 +118,17 @@ export default function EditPage() {
 
         {me?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={me.imageUrl} alt="Current avatar" style={{ width: 96, height: 96, borderRadius: 999, objectFit: "cover", marginBottom: 12 }} />
+          <img
+            src={me.imageUrl}
+            alt="Current avatar"
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: 999,
+              objectFit: "cover",
+              marginBottom: 12,
+            }}
+          />
         ) : null}
 
         <form className={styles.form} onSubmit={onSubmit} aria-busy={loading}>
@@ -176,6 +144,7 @@ export default function EditPage() {
               disabled={loading}
             />
           </label>
+
           <label className={styles.label}>
             Email
             <input
@@ -190,51 +159,20 @@ export default function EditPage() {
               disabled={loading}
             />
           </label>
-          <label className={styles.label}>
-            Custom domain (optional)
-            <input
-              className={styles.input}
-              name="customDomain"
-              autoComplete="url"
-              value={customDomain}
-              onChange={(e) => {
-                setCustomDomain(e.target.value);
-                scheduleVerify(e.target.value);
-              }}
-              placeholder="mysite.com"
-              disabled={loading}
-            />
-          </label>
-          {domainStatus?.domain ? (
-            <div className={styles.panel}>
-              <div className={styles.panelRow}>
-                <div className={styles.mono}>{domainStatus.domain}</div>
-                <span
-                  className={[
-                    styles.badge,
-                    domainStatus.verified ? styles.badgeValid : styles.badgePending,
-                  ].join(" ")}
-                >
-                  {domainStatus.verified ? "✓ Valid configuration" : "Pending DNS"}
-                </span>
-              </div>
-              <div className={styles.hint}>
-                {domainStatus.verified
-                  ? "DNS is pointing to this server. HTTPS will be issued automatically on first visit."
-                  : domainStatus.expectedIp
-                    ? `Add an A record pointing to ${domainStatus.expectedIp}. Checking again…`
-                    : "Configure DNS at your domain provider. Checking again…"}
-                {domainStatus.expectedIp ? (
-                  <>
-                    <br />
-                    <span className={styles.mono}>
-                      A {dnsHostHint(domainStatus.domain)} → {domainStatus.expectedIp}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+
+          <CustomDomainSection
+            customDomain={customDomain}
+            savedCustomDomain={savedCustomDomain}
+            editingCustomDomain={editingCustomDomain}
+            customDomainDisabled={customDomainDisabled}
+            loading={loading}
+            onCustomDomainChange={setCustomDomain}
+            onEditingChange={setEditingCustomDomain}
+            onDisabledChange={setCustomDomainDisabled}
+            onRemove={removeCustomDomain}
+            onMessage={setSuccess}
+          />
+
           <label className={styles.label}>
             Profile image (optional)
             <input
@@ -246,8 +184,13 @@ export default function EditPage() {
               disabled={loading}
             />
           </label>
+
           <div className={styles.actions}>
-            <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={loading}>
+            <button
+              type="submit"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              disabled={loading}
+            >
               {loading ? "Saving…" : "Save"}
             </button>
           </div>
@@ -256,4 +199,3 @@ export default function EditPage() {
     </div>
   );
 }
-

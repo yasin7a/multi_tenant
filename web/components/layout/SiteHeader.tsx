@@ -1,33 +1,20 @@
 import Link from "next/link";
 import styles from "./SiteHeader.module.css";
 import LogoutButton from "./LogoutButton";
-import { getRequestCookieHeader, getRequestHost, getRequestOrigin } from "../lib/server-request";
+import { getMe } from "@/lib/api/profile";
+import {
+  getRequestCookieHeader,
+  getRequestHost,
+  getRequestOrigin,
+} from "@/lib/server-request";
 
-type Me = {
-  id: string;
-  username: string;
-  email: string;
-  tenant: { subdomain: string; customDomain: string | null };
-};
-
-async function getMe() {
+export default async function SiteHeader() {
   const [origin, host, cookie] = await Promise.all([
     getRequestOrigin(),
     getRequestHost(),
     getRequestCookieHeader(),
   ]);
-  if (!cookie) return null;
-
-  const res = await fetch(`${origin}/api/profile/me`, {
-    headers: { host, cookie, accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as Me;
-}
-
-export default async function SiteHeader() {
-  const me = await getMe();
+  const me = await getMe(origin, host, cookie);
 
   return (
     <header className={styles.header}>
@@ -39,7 +26,7 @@ export default async function SiteHeader() {
         <nav className={styles.nav}>
           {me ? (
             <>
-              <Link className={`${styles.pill}`} href="/edit">
+              <Link className={styles.pill} href="/edit">
                 Edit profile
               </Link>
               <LogoutButton className={`${styles.pill} ${styles.buttonLike}`}>
@@ -48,7 +35,7 @@ export default async function SiteHeader() {
             </>
           ) : (
             <>
-              <Link className={`${styles.pill}`} href="/login">
+              <Link className={styles.pill} href="/login">
                 Sign in
               </Link>
               <Link className={`${styles.pill} ${styles.primary}`} href="/register">
@@ -61,4 +48,3 @@ export default async function SiteHeader() {
     </header>
   );
 }
-

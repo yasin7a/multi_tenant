@@ -1,14 +1,61 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getServerRootDomain } from "@/lib/root-domain";
 
 function isLoggedIn(request: NextRequest) {
   // API sets this cookie (httpOnly). Proxy can still read it for redirects.
   return Boolean(request.cookies.get("userId")?.value);
 }
 
-export function proxy(request: NextRequest) {
+async function getCustomDomainIfAny(request: NextRequest) {
+  const hostHeader = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
+  const host = hostHeader.split(",")[0].trim().replace(/:\d+$/, "");
+  const root = getServerRootDomain();
+
+  // Only canonicalize platform subdomains (custom domains are already canonical).
+  if (!host.endsWith(`.${root}`)) return null;
+
+  const apiOrigin = process.env.API_ORIGIN || "http://127.0.0.1:9097";
+  const res = await fetch(`${apiOrigin}/api/profile/public`, {
+    headers: {
+      host,
+      accept: "application/json",
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    tenant?: { customDomain?: string | null; customDomainEnabled?: boolean };
+  };
+  const tenant = data?.tenant;
+  if (!tenant?.customDomain || tenant.customDomainEnabled === false) return null;
+  const custom = String(tenant.customDomain);
+  if (custom === host) return null;
+  return custom;
+}
+
+// This function can be marked `async` if using `await` inside
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const loggedIn = isLoggedIn(request);
+
+  // Canonicalize: if tenant has a custom domain, always redirect to it
+  // even if the user is not logged in.
+  if (!pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
+    try {
+      const custom = await getCustomDomainIfAny(request);
+      if (custom) {
+        const url = request.nextUrl.clone();
+        url.hostname = custom;
+        url.protocol = "https:";
+        // keep pathname + search
+        return NextResponse.redirect(url);
+      }
+    } catch {
+      // ignore and continue (never block page load on proxy errors)
+    }
+  }
 
   // Protect edit page
   if (pathname.startsWith("/edit")) {
@@ -34,6 +81,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/edit/:path*", "/login", "/register"],
+  matcher: ["/:path*"],
 };
 

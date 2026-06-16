@@ -1,89 +1,35 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import styles from "./page.module.css";
-import { parseHost } from "./lib/tenant";
-import { getRequestCookieHeader, getRequestHost, getRequestOrigin } from "./lib/server-request";
-
-type HostCtx =
-  | { type: "main" }
-  | { type: "tenant"; subdomain: string; isCustomDomain: boolean }
-  | { type: "unknown"; host: string };
-
-type PublicProfile = {
-  username: string;
-  email: string;
-  imageUrl: string | null;
-  createdAt: string;
-  tenant: { subdomain: string; customDomain: string | null; createdAt: string };
-};
-
-type Me = {
-  id: string;
-  username: string;
-  email: string;
-  imageUrl: string | null;
-  tenant: { subdomain: string; customDomain: string | null; createdAt: string };
-};
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-async function getTenantPublicProfile(origin: string, host: string) {
-  // Use the same origin so this works robustly with Caddy + custom domains.
-  // (Next rewrites /api/* to the API server in dev; in prod Caddy routes /api/* to the API.)
-  const res = await fetch(`${origin}/api/profile/public`, {
-    headers: { host },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as PublicProfile;
-}
-
-async function resolveHostViaApi(origin: string, host: string): Promise<HostCtx> {
-  const res = await fetch(`${origin}/api/site`, {
-    headers: { host, accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) return { type: "unknown", host };
-  return (await res.json()) as HostCtx;
-}
-
-function shouldRedirectToCustomDomain(currentHost: string, profile: PublicProfile) {
-  const custom = profile.tenant.customDomain;
-  if (!custom) return null;
-  if (currentHost === custom) return null;
-  // If we can see a custom domain for this profile, always canonicalize to it.
-  return custom;
-}
-
-async function getMe(origin: string, host: string) {
-  const cookie = await getRequestCookieHeader();
-  if (!cookie) return null;
-  const res = await fetch(`${origin}/api/profile/me`, {
-    headers: { host, cookie, accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as Me;
-}
+import LandingCard from "@/components/landing/LandingCard";
+import PublicProfileCard from "@/components/profile/PublicProfileCard";
+import { getMe, getPublicProfile } from "@/lib/api/profile";
+import { getServerRootDomain } from "@/lib/root-domain";
+import {
+  getRequestCookieHeader,
+  getRequestHost,
+  getRequestOrigin,
+  getServerFetchOrigin,
+} from "@/lib/server-request";
+import { parseHost } from "@/lib/tenant";
+import { resolveHostViaApi, shouldRedirectToCustomDomain } from "@/lib/tenant-host";
+import type { HostContext } from "@/types";
 
 export async function generateMetadata(): Promise<Metadata> {
   const host = await getRequestHost();
   const origin = await getRequestOrigin();
-  let hostCtx = parseHost(host) as HostCtx;
+  const fetchOrigin = await getServerFetchOrigin();
+  let hostCtx = parseHost(host) as HostContext;
   if (hostCtx.type === "unknown") hostCtx = await resolveHostViaApi(origin, host);
 
-  // Robust fallback for custom domains: attempt to fetch profile anyway.
-  const profile = await getTenantPublicProfile(origin, host);
+  const profile = await getPublicProfile(fetchOrigin, host);
   if (!profile) {
     const tenantName =
-      hostCtx.type === "tenant" ? hostCtx.subdomain : hostCtx.type === "unknown" ? hostCtx.host : host;
+      hostCtx.type === "tenant"
+        ? hostCtx.subdomain
+        : hostCtx.type === "unknown"
+          ? hostCtx.host
+          : host;
     return {
       title: "Site not found",
       description: `The tenant ${tenantName} does not exist.`,
@@ -91,12 +37,13 @@ export async function generateMetadata(): Promise<Metadata> {
     };
   }
 
+  const rootDomain = getServerRootDomain();
   const title = `${profile.username}'s profile`;
-  const description = profile.tenant.customDomain
-    ? `Public profile of ${profile.username} at ${profile.tenant.customDomain}`
-    : `Public profile of ${profile.username} at ${profile.tenant.subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"}`;
+  const description =
+    profile.tenant.customDomain && profile.tenant.customDomainEnabled !== false
+      ? `Public profile of ${profile.username} at ${profile.tenant.customDomain}`
+      : `Public profile of ${profile.username} at ${profile.tenant.subdomain}.${rootDomain}`;
   const image = profile.imageUrl ? `${origin}${profile.imageUrl}` : undefined;
-
   const canonicalHost = shouldRedirectToCustomDomain(host, profile) || host;
   const canonical = `${origin.startsWith("https:") ? "https" : "http"}://${canonicalHost}`;
 
@@ -118,125 +65,42 @@ export async function generateMetadata(): Promise<Metadata> {
       images: image ? [image] : undefined,
     },
   };
-
-  return {
-    title: "Multi Tenant App",
-    description: "Create a profile site on a subdomain or custom domain.",
-    alternates: { canonical: origin },
-  };
 }
 
 export default async function Home() {
   const host = await getRequestHost();
-  const origin = await getRequestOrigin();
-  let hostCtx = parseHost(host) as HostCtx;
+  const fetchOrigin = await getServerFetchOrigin();
+  const rootDomain = getServerRootDomain();
+  const cookie = await getRequestCookieHeader();
+
+  let hostCtx = parseHost(host) as HostContext;
   if (hostCtx.type === "unknown") {
-    hostCtx = await resolveHostViaApi(origin, host);
+    hostCtx = await resolveHostViaApi(fetchOrigin, host);
   }
 
-  const profile = await getTenantPublicProfile(origin, host);
+  const profile = await getPublicProfile(fetchOrigin, host);
   if (profile) {
     const canonicalCustom = shouldRedirectToCustomDomain(host, profile);
-    if (canonicalCustom) {
-      redirect(`https://${canonicalCustom}`);
-    }
+    if (canonicalCustom) redirect(`https://${canonicalCustom}`);
 
-    const me = await getMe(origin, host);
+    const me = await getMe(fetchOrigin, host, cookie);
 
     return (
       <div className={styles.page}>
         <main className={styles.main}>
-          {!profile ? (
-            <>
-              <h1>Site not found</h1>
-              <p>
-                The tenant{" "}
-                <b>
-                  {hostCtx.type === "tenant"
-                    ? hostCtx.subdomain
-                    : hostCtx.type === "unknown"
-                      ? hostCtx.host
-                      : host}
-                </b>{" "}
-                does not exist.
-              </p>
-              <p>
-                <Link href="/login">Login</Link> or <Link href="/register">Register</Link>
-              </p>
-            </>
-          ) : (
-            <div className={styles.card}>
-              <h1>{profile.username}</h1>
-              <div className={styles.subTitle}>
-                <span className={styles.pill}>
-                  {profile.tenant.customDomain
-                    ? profile.tenant.customDomain
-                    : `${profile.tenant.subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"}`}
-                </span>
-                <span className={styles.mono}>
-                  {me?.tenant?.subdomain === profile.tenant.subdomain ? "Signed in" : "Public profile"}
-                </span>
-              </div>
-
-              {profile.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className={styles.avatar} src={profile.imageUrl} alt={`${profile.username} avatar`} />
-              ) : (
-                <div className={styles.avatarFallback} aria-label="Avatar">
-                  {profile.username?.slice(0, 1)?.toUpperCase()}
-                </div>
-              )}
-
-              <div className={styles.infoGrid}>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Username</span>
-                  <span>{profile.username}</span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Email</span>
-                  <span>{profile.email}</span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Member since</span>
-                  <span>{formatDate(profile.createdAt)}</span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Site created</span>
-                  <span>{formatDate(profile.tenant.createdAt)}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          <PublicProfileCard profile={profile} me={me} rootDomain={rootDomain} />
         </main>
       </div>
     );
   }
 
-  const rootDomain =
-    host === "localhost"
-      ? process.env.NEXT_PUBLIC_ROOT_DOMAIN || "lvh.me"
-      : host;
+  const landingRootDomain = host === "localhost" ? rootDomain : host;
 
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <div className={styles.card}>
-          <h1>Multi Tenant App</h1>
-          <p className={styles.muted}>
-            Create your own profile site on a subdomain. Your public profile lives at{" "}
-            <code>username.{rootDomain}</code>.
-          </p>
-          <div className={styles.row}>
-            <Link className={styles.link} href="/register">
-              Register
-            </Link>
-            <Link className={styles.link} href="/login">
-              Login
-            </Link>
-          </div>
-        </div>
+        <LandingCard rootDomain={landingRootDomain} />
       </main>
     </div>
   );
 }
-

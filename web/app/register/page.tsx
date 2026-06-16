@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import styles from "../auth.module.css";
-import { getTenantWebUrl } from "../lib/tenant";
+import { getTenantWebUrl } from "@/lib/tenant";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
