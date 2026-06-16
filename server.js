@@ -23,7 +23,7 @@ const ALLOWED_IMAGE_TYPES = {
   'image/webp': '.webp',
 }
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'lvh.me'
-const PORT = process.env.PORT || 3000
+const PORT = process.env.PORT || 9097
 const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/$/, '')
 const SERVER_IP = process.env.SERVER_IP || ''
 const authHandoffs = new Map()
