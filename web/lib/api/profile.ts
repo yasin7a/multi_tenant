@@ -1,31 +1,22 @@
 import type { Me, PublicProfile } from "@/types";
+import { tenantHostHeaders } from "@/lib/api-headers";
+import { getApiOrigin } from "@/lib/api-origin";
 
-export async function getPublicProfile(origin: string, host: string) {
-  const res = await fetch(`${origin}/api/profile/public`, {
-    headers: { host },
+export async function getPublicProfile(host: string) {
+  const res = await fetch(`${getApiOrigin()}/api/profile/public`, {
+    headers: tenantHostHeaders(host),
     cache: "no-store",
   });
   if (!res.ok) return null;
   return (await res.json()) as PublicProfile;
 }
 
-export async function getMe(origin: string, host: string, cookie?: string | null) {
+export async function getMe(host: string, cookie?: string | null) {
   if (!cookie) return null;
-  const res = await fetch(`${origin}/api/profile/me`, {
-    headers: { host, cookie, accept: "application/json" },
+  const res = await fetch(`${getApiOrigin()}/api/profile/me`, {
+    headers: tenantHostHeaders(host, { cookie }),
     cache: "no-store",
   });
   if (!res.ok) return null;
   return (await res.json()) as Me;
-}
-
-export async function updateProfile(form: FormData) {
-  const res = await fetch("/api/profile", {
-    method: "POST",
-    credentials: "include",
-    body: form,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || "Update failed");
-  return data as Me & { redirectUrl?: string };
 }

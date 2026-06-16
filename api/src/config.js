@@ -16,3 +16,16 @@ export const ALLOWED_IMAGE_TYPES = new Set([
   "image/gif",
   "image/webp",
 ]);
+
+const DEV_ROOT_DOMAIN = "lvh.me";
+const isProd = process.env.NODE_ENV === "production";
+
+/** Root domain for API responses — lvh.me in local dev, ROOT_DOMAIN in production. */
+export function getRequestRootDomain(hostname) {
+  const host = String(hostname || "").replace(/:\d+$/, "");
+  if (!isProd) {
+    if (host === DEV_ROOT_DOMAIN || host.endsWith(`.${DEV_ROOT_DOMAIN}`)) return DEV_ROOT_DOMAIN;
+    if (host === "localhost" || host === "127.0.0.1") return DEV_ROOT_DOMAIN;
+  }
+  return ROOT_DOMAIN;
+}

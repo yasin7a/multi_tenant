@@ -1,4 +1,5 @@
 import styles from "@/app/page.module.css";
+import { resolveImageSrc } from "@/lib/assets";
 import { formatDate } from "@/lib/format";
 import type { Me, PublicProfile } from "@/types";
 
@@ -6,13 +7,16 @@ type Props = {
   profile: PublicProfile;
   me: Me | null;
   rootDomain: string;
+  origin: string;
 };
 
-export default function PublicProfileCard({ profile, me, rootDomain }: Props) {
+export default function PublicProfileCard({ profile, me, rootDomain, origin }: Props) {
   const siteLabel =
     profile.tenant.customDomain && profile.tenant.customDomainEnabled !== false
       ? profile.tenant.customDomain
       : `${profile.tenant.subdomain}.${rootDomain}`;
+
+  const avatarSrc = resolveImageSrc(profile.imageUrl, origin);
 
   return (
     <div className={styles.card}>
@@ -24,11 +28,11 @@ export default function PublicProfileCard({ profile, me, rootDomain }: Props) {
         </span>
       </div>
 
-      {profile.imageUrl ? (
+      {avatarSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           className={styles.avatar}
-          src={profile.imageUrl}
+          src={avatarSrc}
           alt={`${profile.username} avatar`}
         />
       ) : (

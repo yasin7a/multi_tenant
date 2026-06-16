@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { ROOT_DOMAIN } from "../config.js";
+import { ROOT_DOMAIN, getRequestRootDomain } from "../config.js";
 import { prisma } from "../lib/prisma.js";
 import { getAuthUser } from "../lib/auth.js";
 import { createAuthHandoff } from "../lib/auth-handoff.js";
 import { normalizeCustomDomain, isValidCustomDomain } from "../lib/domains.js";
 import { resolveHost } from "../lib/hosts.js";
 import { publicProfileSelect, authUserSelect } from "../lib/selects.js";
-import { upload, deleteProfileImage } from "../lib/uploads.js";
+import { upload, deleteProfileImage, withNormalizedImage } from "../lib/uploads.js";
 import { getTenantBaseUrl, isCustomDomainActive } from "../lib/urls.js";
 
 const router = Router();
@@ -22,13 +22,16 @@ router.get("/public", async (req, res) => {
   });
 
   if (!user) return res.status(404).json({ error: "profile not found" });
-  return res.json(user);
+  return res.json(withNormalizedImage(user));
 });
 
 router.get("/me", async (req, res) => {
   const authUser = await getAuthUser(req.cookies.userId);
   if (!authUser) return res.status(401).json({ error: "not authenticated" });
-  return res.json({ ...authUser, rootDomain: ROOT_DOMAIN });
+  return res.json({
+    ...withNormalizedImage(authUser),
+    rootDomain: getRequestRootDomain(req.hostname),
+  });
 });
 
 router.post("/", upload.single("image"), async (req, res) => {
@@ -127,13 +130,18 @@ router.post("/", upload.single("image"), async (req, res) => {
     req.hostname !== updatedUser.tenant.customDomain
   ) {
     const token = createAuthHandoff(updatedUser.id);
+    const payload = withNormalizedImage(updatedUser);
     return res.json({
-      ...updatedUser,
+      ...payload,
+      rootDomain: getRequestRootDomain(req.hostname),
       redirectUrl: `${getTenantBaseUrl(updatedUser.tenant)}/api/auth/continue?token=${token}&next=${encodeURIComponent("/edit")}`,
     });
   }
 
-  return res.json(updatedUser);
+  return res.json({
+    ...withNormalizedImage(updatedUser),
+    rootDomain: getRequestRootDomain(req.hostname),
+  });
 });
 
 export default router;

@@ -26,6 +26,12 @@ export function createApp() {
     express.static(path.join(__dirname, "..", "public", "uploads")),
   );
 
+  // Legacy image paths saved as /uploads/...
+  app.use(
+    "/uploads",
+    express.static(path.join(__dirname, "..", "public", "uploads")),
+  );
+
   app.use("/api", healthRoutes);
   app.use("/api/internal", internalRoutes);
   app.use("/api", siteRoutes);

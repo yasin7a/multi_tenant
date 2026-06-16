@@ -4,23 +4,34 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import styles from "@/app/auth.module.css";
 import CustomDomainSection from "@/components/edit/CustomDomainSection";
-import { updateProfile } from "@/lib/api/profile";
+import EditPageSkeleton from "@/components/edit/EditPageSkeleton";
+import { resolveImageSrc } from "@/lib/assets";
+import { inferRootDomainFromHost } from "@/lib/root-domain";
+import { updateProfile } from "@/lib/api/profile-client";
 import type { Me } from "@/types";
+
+function resolveDisplayRootDomain() {
+  if (typeof window === "undefined") return "lvh.me";
+  return inferRootDomainFromHost(window.location.hostname);
+}
 
 export default function EditPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [customDomain, setCustomDomain] = useState("");
-  const [savedCustomDomain, setSavedCustomDomain] = useState("");
-  const [editingCustomDomain, setEditingCustomDomain] = useState(false);
   const [customDomainDisabled, setCustomDomainDisabled] = useState(false);
   const [image, setImage] = useState<File | null>(null);
-  const [rootDomain, setRootDomain] = useState("lvh.me");
+  const [rootDomain, setRootDomain] = useState(() =>
+    typeof window !== "undefined"
+      ? inferRootDomainFromHost(window.location.hostname)
+      : "lvh.me",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -36,13 +47,13 @@ export default function EditPage() {
         setUsername(data.username || "");
         setEmail(data.email || "");
         setCustomDomain(saved);
-        setSavedCustomDomain(saved);
-        setEditingCustomDomain(!saved);
         setCustomDomainDisabled(data.tenant?.customDomainEnabled === false);
-        if (data.rootDomain) setRootDomain(data.rootDomain);
+        setRootDomain(resolveDisplayRootDomain());
+        setInitialLoading(false);
       })
       .catch(async () => {
         if (cancelled) return;
+        setInitialLoading(false);
         try {
           await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
         } catch {
@@ -54,13 +65,6 @@ export default function EditPage() {
       cancelled = true;
     };
   }, []);
-
-  function removeCustomDomain() {
-    setCustomDomain("");
-    setEditingCustomDomain(true);
-    setError(null);
-    setSuccess("Domain cleared. Click Save to apply.");
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,9 +88,8 @@ export default function EditPage() {
 
       const saved = data.tenant?.customDomain || "";
       setMe(data);
-      setSavedCustomDomain(saved);
       setCustomDomain(saved);
-      setEditingCustomDomain(!saved);
+      setRootDomain(resolveDisplayRootDomain());
       setSuccess("Profile updated.");
       setImage(null);
     } catch (err) {
@@ -94,6 +97,10 @@ export default function EditPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (initialLoading) {
+    return <EditPageSkeleton />;
   }
 
   return (
@@ -125,7 +132,7 @@ export default function EditPage() {
         {me?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={me.imageUrl}
+            src={resolveImageSrc(me.imageUrl) ?? me.imageUrl}
             alt="Current avatar"
             style={{
               width: 96,
@@ -168,15 +175,10 @@ export default function EditPage() {
 
           <CustomDomainSection
             customDomain={customDomain}
-            savedCustomDomain={savedCustomDomain}
-            editingCustomDomain={editingCustomDomain}
             customDomainDisabled={customDomainDisabled}
             loading={loading}
             onCustomDomainChange={setCustomDomain}
-            onEditingChange={setEditingCustomDomain}
             onDisabledChange={setCustomDomainDisabled}
-            onRemove={removeCustomDomain}
-            onMessage={setSuccess}
           />
 
           <label className={styles.label}>

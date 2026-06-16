@@ -21,7 +21,7 @@ async function getCustomDomainIfAny(request: NextRequest) {
       : process.env.API_ORIGIN || "http://localhost:9097";
   const res = await fetch(`${apiOrigin}/api/profile/public`, {
     headers: {
-      host,
+      "x-forwarded-host": host,
       accept: "application/json",
     },
     cache: "no-store",

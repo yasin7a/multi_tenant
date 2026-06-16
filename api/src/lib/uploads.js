@@ -9,8 +9,9 @@ export async function ensureUploadsDir() {
 }
 
 export async function deleteProfileImage(imageUrl) {
-  if (!imageUrl?.startsWith("/api/uploads/")) return;
-  const filename = path.basename(imageUrl);
+  const normalized = normalizeImageUrl(imageUrl);
+  if (!normalized?.startsWith("/api/uploads/")) return;
+  const filename = path.basename(normalized);
   if (!filename || filename.includes("..")) return;
   const filepath = path.resolve(UPLOADS_DIR, filename);
   if (!filepath.startsWith(path.resolve(UPLOADS_DIR))) return;
@@ -53,3 +54,19 @@ export const upload = multer({
     return cb(null, true);
   },
 });
+
+/** Legacy rows may use /uploads/... — API serves files at /api/uploads/... */
+export function normalizeImageUrl(imageUrl) {
+  if (!imageUrl) return null;
+  const value = String(imageUrl).trim();
+  if (!value) return null;
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  if (value.startsWith("/api/uploads/")) return value;
+  if (value.startsWith("/uploads/")) return `/api${value}`;
+  return value;
+}
+
+export function withNormalizedImage(user) {
+  if (!user) return user;
+  return { ...user, imageUrl: normalizeImageUrl(user.imageUrl) };
+}

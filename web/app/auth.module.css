@@ -149,6 +149,82 @@
   line-height: 18px;
 }
 
+@keyframes skeletonPulse {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.55;
+  }
+}
+
+.skeleton {
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f0f0f0 0%, #e8e8e8 50%, #f0f0f0 100%);
+  background-size: 200% 100%;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+.skeletonTitle {
+  height: 32px;
+  width: 55%;
+  margin-bottom: 14px;
+  border-radius: 8px;
+}
+
+.skeletonLine {
+  height: 14px;
+  width: 92%;
+  margin-bottom: 8px;
+}
+
+.skeletonLineShort {
+  height: 14px;
+  width: 70%;
+  margin-bottom: 18px;
+}
+
+.skeletonLabel {
+  height: 12px;
+  width: 28%;
+  margin-bottom: 6px;
+  border-radius: 6px;
+}
+
+.skeletonMono {
+  height: 14px;
+  width: 65%;
+  border-radius: 6px;
+}
+
+.skeletonLink {
+  height: 16px;
+  width: 72px;
+  border-radius: 6px;
+}
+
+.skeletonAvatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.skeletonInput {
+  height: 40px;
+  width: 100%;
+}
+
+.skeletonButton {
+  height: 40px;
+  width: 88px;
+  border-radius: 999px;
+  margin-top: 4px;
+}
+
 @media (prefers-color-scheme: dark) {
   .card {
     background: #000;
@@ -198,6 +274,11 @@
 
   .hint {
     color: #999;
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, #1a1a1a 0%, #2a2a2a 50%, #1a1a1a 100%);
+    background-size: 200% 100%;
   }
 }
 

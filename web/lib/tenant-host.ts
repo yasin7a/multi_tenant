@@ -1,3 +1,5 @@
+import { tenantHostHeaders } from "@/lib/api-headers";
+import { getApiOrigin } from "@/lib/api-origin";
 import type { HostContext, PublicProfile } from "@/types";
 
 export function shouldRedirectToCustomDomain(currentHost: string, profile: PublicProfile) {
@@ -7,9 +9,9 @@ export function shouldRedirectToCustomDomain(currentHost: string, profile: Publi
   return custom;
 }
 
-export async function resolveHostViaApi(origin: string, host: string): Promise<HostContext> {
-  const res = await fetch(`${origin}/api/site`, {
-    headers: { host, accept: "application/json" },
+export async function resolveHostViaApi(host: string): Promise<HostContext> {
+  const res = await fetch(`${getApiOrigin()}/api/site`, {
+    headers: tenantHostHeaders(host),
     cache: "no-store",
   });
   if (!res.ok) return { type: "unknown", host };

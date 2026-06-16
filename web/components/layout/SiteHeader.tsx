@@ -5,16 +5,11 @@ import { getMe } from "@/lib/api/profile";
 import {
   getRequestCookieHeader,
   getRequestHost,
-  getRequestOrigin,
 } from "@/lib/server-request";
 
 export default async function SiteHeader() {
-  const [origin, host, cookie] = await Promise.all([
-    getRequestOrigin(),
-    getRequestHost(),
-    getRequestCookieHeader(),
-  ]);
-  const me = await getMe(origin, host, cookie);
+  const [host, cookie] = await Promise.all([getRequestHost(), getRequestCookieHeader()]);
+  const me = await getMe(host, cookie);
 
   return (
     <header className={styles.header}>
